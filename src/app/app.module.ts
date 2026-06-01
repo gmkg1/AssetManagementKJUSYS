@@ -11,6 +11,7 @@ import { ViewAssetsComponent } from './asset-management/view-assets/view-assets.
 import { IssueAssetComponent } from './asset-management/issue-asset/issue-asset.component';
 import { ReturnLogComponent } from './asset-management/return-log/return-log.component';
 import { ReportsComponent } from './asset-management/reports/reports.component';
+import { ApiHealthComponent } from './services/api-health.component';
 
 @NgModule({
   declarations: [
@@ -27,6 +28,7 @@ import { ReportsComponent } from './asset-management/reports/reports.component';
     FormsModule,
     HttpClientModule,
     AppRoutingModule,
+    ApiHealthComponent,   // standalone component
   ],
   providers: [],
   bootstrap: [AppComponent],

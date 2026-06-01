@@ -1,5 +1,8 @@
 <div class="flex flex-col h-screen w-screen overflow-hidden bg-[#F0F2F5] font-inter text-xs">
 
+  <!-- API Health Widget (remove after verifying connection) -->
+  <app-api-health></app-api-health>
+
   <!-- TOP HEADER (full width, like USYS) -->
   <header class="h-12 bg-white border-b border-slate-200 flex items-center px-4 flex-shrink-0 gap-4">
     <div class="flex flex-col leading-none w-36 flex-shrink-0">
@@ -121,10 +124,23 @@
         </div>
       </div>
 
+      <!-- API Error Banner -->
+      <div *ngIf="apiError" class="mb-3 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 flex items-center gap-2">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" class="w-4 h-4 flex-shrink-0">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/>
+        </svg>
+        {{ apiError }} — Check that the backend is running on <strong>localhost:8080</strong>.
+      </div>
+
       <h2 class="text-xs font-medium text-slate-600 mb-3">Asset Departments</h2>
 
+      <!-- Loading skeleton -->
+      <div *ngIf="isLoading" class="grid grid-cols-6 gap-3 mb-4">
+        <div *ngFor="let i of [1,2,3,4,5,6]" class="bg-white rounded-xl p-3 shadow-sm animate-pulse h-20"></div>
+      </div>
+
       <!-- Department cards -->
-      <div class="grid grid-cols-6 gap-3 mb-4">
+      <div *ngIf="!isLoading" class="grid grid-cols-6 gap-3 mb-4">
         <div *ngFor="let dept of departments"
           class="bg-white rounded-xl p-3 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-150"
           (click)="navigateToDeptAssets(dept.name)">
