@@ -50,6 +50,9 @@ public class AssetsHandler implements Handler<RoutingContext> {
 
                 result =
                         assetsService.getIssuedAssetsDetailed();
+            }else if (path.contains("asset-status-summary")) {
+
+                result = assetsService.getAssetStatusSummary();
             }
 
             // NORMAL ASSETS API

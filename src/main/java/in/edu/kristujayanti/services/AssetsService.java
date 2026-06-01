@@ -442,6 +442,123 @@ public class AssetsService {
 
         return result;
     }
+    public JsonArray getAssetStatusSummary() {
+
+        JsonArray result = new JsonArray();
+
+        MongoCollection<Document> collection =
+                mongoDatabase.getCollection("assets");
+
+        List<Document> pipeline = List.of(
+
+                // Join Asset Tags
+                new Document("$lookup",
+                        new Document("from", "assettags")
+                                .append("localField", "assetTagId")
+                                .append("foreignField", "_id")
+                                .append("as", "assetTag")),
+
+                new Document("$unwind", "$assetTag"),
+
+                // Join Categories
+                new Document("$lookup",
+                        new Document("from", "categories")
+                                .append("localField", "assetTag.categoryId")
+                                .append("foreignField", "_id")
+                                .append("as", "category")),
+
+                new Document("$unwind", "$category"),
+
+                // Join Status
+                new Document("$lookup",
+                        new Document("from", "status")
+                                .append("localField", "statusId")
+                                .append("foreignField", "_id")
+                                .append("as", "status")),
+
+                new Document("$unwind", "$status"),
+
+                // Group by Asset Tag
+                new Document("$group",
+                        new Document("_id",
+                                new Document("assetTagId", "$assetTag._id")
+                                        .append("assetTagName", "$assetTag.assetTagName")
+                                        .append("categoryName", "$category.categoryName"))
+
+                                .append("totalAssets",
+                                        new Document("$sum", "$quantity"))
+
+                                .append("ready",
+                                        new Document("$sum",
+                                                new Document("$cond",
+                                                        List.of(
+                                                                new Document("$eq",
+                                                                        List.of("$status.statusName",
+                                                                                "Ready to Deploy")),
+                                                                "$quantity",
+                                                                0))))
+
+                                .append("deployed",
+                                        new Document("$sum",
+                                                new Document("$cond",
+                                                        List.of(
+                                                                new Document("$eq",
+                                                                        List.of("$status.statusName",
+                                                                                "Deployed")),
+                                                                "$quantity",
+                                                                0))))
+
+                                .append("deadStock",
+                                        new Document("$sum",
+                                                new Document("$cond",
+                                                        List.of(
+                                                                new Document("$eq",
+                                                                        List.of("$status.statusName",
+                                                                                "Dead Stock")),
+                                                                "$quantity",
+                                                                0))))
+
+                                .append("underMaintenance",
+                                        new Document("$sum",
+                                                new Document("$cond",
+                                                        List.of(
+                                                                new Document("$eq",
+                                                                        List.of("$status.statusName",
+                                                                                "Under Maintenance")),
+                                                                "$quantity",
+                                                                0))))
+
+                                .append("damaged",
+                                        new Document("$sum",
+                                                new Document("$cond",
+                                                        List.of(
+                                                                new Document("$eq",
+                                                                        List.of("$status.statusName",
+                                                                                "Damaged")),
+                                                                "$quantity",
+                                                                0))))
+                )
+        );
+
+        for (Document doc : collection.aggregate(pipeline)) {
+
+            Document id = (Document) doc.get("_id");
+
+            JsonObject json = new JsonObject()
+                    .put("assetTagName", id.getString("assetTagName"))
+                    .put("category", id.getString("categoryName"))
+                    .put("totalAssets", doc.getInteger("totalAssets", 0))
+                    .put("ready", doc.getInteger("ready", 0))
+                    .put("deployed", doc.getInteger("deployed", 0))
+                    .put("deadStock", doc.getInteger("deadStock", 0))
+                    .put("underMaintenance", doc.getInteger("underMaintenance", 0))
+                    .put("damaged", doc.getInteger("damaged", 0));
+
+            result.add(json);
+        }
+
+        return result;
+    }
     private JsonObject toJson(Document asset) {
         return new JsonObject()
                 .put("_id", objectIdToString(asset.getObjectId("_id")))
