@@ -32,8 +32,8 @@ export class AssetService {
     return this.http.get<any>(`${this.baseUrl}/assets/issued-assets`);
   }
 
-  /** GET /health — backend health check */
-  checkHealth() {
-    return this.http.get(`${this.baseUrl}/health`);
+  /** GET /assets/asset-status-summary — per-tag status breakdown */
+  getAssetStatusSummary() {
+    return this.http.get<any>(`${this.baseUrl}/assets/asset-status-summary`);
   }
 }

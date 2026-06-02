@@ -1,16 +1,18 @@
 import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
+import { AssetService } from '../../services/asset.service';
 
 export interface ReportAsset {
   id: string;
   name: string;
-  type: 'Asset' | 'Component' | 'Consumable' | 'Accessory';
+  category: string;
+  type: 'Asset';
   total: number;
   readyToDeploy: number;
   deployed: number;
   deadStock: number;
   underService: number;
-  eol: number;
+  damaged: number;
   checked: boolean;
 }
 
@@ -23,63 +25,37 @@ const PAGE_SIZE = 8;
 })
 export class ReportsComponent implements OnInit, OnDestroy {
 
-  departments = ['I.T', 'Electrical', 'Sound', 'Stationery', 'Housekeeping', 'Furnitures'];
-  activeDept  = 'I.T';
+  // ── state ────────────────────────────────────────────────────────────────────
+  departments: string[] = [];
+  activeDept  = '';
   searchQuery = '';
   currentPage = 1;
   allChecked  = false;
   sidebarOpen = false;
+  isLoading   = true;
+  apiError: string | null = null;
 
-  // ── Filter state ─────────────────────────────────────────────────────────────
-  filterOpen = false;
+  // ── filter ───────────────────────────────────────────────────────────────────
+  filterOpen   = false;
   filterTypes: string[] = [];
   readonly typeFilterOptions = ['Asset', 'Component', 'Consumable', 'Accessory'];
 
-  private allAssets: Record<string, ReportAsset[]> = {
-    'I.T': [
-      { id: '1210073015', name: 'Laptops',     type: 'Asset',      total: 320,  readyToDeploy: 270, deployed: 130, deadStock: 10, underService: 10, eol: 10, checked: false },
-      { id: '1210073015', name: 'Desktops',    type: 'Asset',      total: 320,  readyToDeploy: 270, deployed: 130, deadStock: 10, underService: 10, eol: 10, checked: false },
-      { id: '1210073015', name: 'VOIP Phones', type: 'Component',  total: 320,  readyToDeploy: 270, deployed: 130, deadStock: 10, underService: 10, eol: 10, checked: false },
-      { id: '1210073015', name: 'Displays',    type: 'Consumable', total: 320,  readyToDeploy: 270, deployed: 130, deadStock: 10, underService: 10, eol: 10, checked: false },
-      { id: '1210073015', name: 'Tablets',     type: 'Accessory',  total: 320,  readyToDeploy: 270, deployed: 130, deadStock: 10, underService: 10, eol: 10, checked: false },
-      { id: '1210073015', name: 'CCTV',        type: 'Consumable', total: 320,  readyToDeploy: 270, deployed: 130, deadStock: 10, underService: 10, eol: 10, checked: false },
-      { id: '1210073015', name: 'Keyboards',   type: 'Consumable', total: 320,  readyToDeploy: 270, deployed: 130, deadStock: 10, underService: 10, eol: 10, checked: false },
-      { id: '1210073015', name: 'Mouse',       type: 'Consumable', total: 320,  readyToDeploy: 270, deployed: 130, deadStock: 10, underService: 10, eol: 10, checked: false },
-    ],
-    'Electrical': [
-      { id: '1210073016', name: 'Projectors',  type: 'Asset',      total: 45,   readyToDeploy: 30,  deployed: 12, deadStock: 2, underService: 1, eol: 0, checked: false },
-      { id: '1210073017', name: 'UPS Units',   type: 'Asset',      total: 60,   readyToDeploy: 50,  deployed: 8,  deadStock: 1, underService: 1, eol: 0, checked: false },
-      { id: '1210073018', name: 'Air Cond.',   type: 'Asset',      total: 30,   readyToDeploy: 25,  deployed: 4,  deadStock: 0, underService: 1, eol: 0, checked: false },
-      { id: '1210073019', name: 'Fans',        type: 'Consumable', total: 120,  readyToDeploy: 100, deployed: 18, deadStock: 2, underService: 0, eol: 0, checked: false },
-    ],
-    'Sound': [
-      { id: '1210073020', name: 'Microphones', type: 'Asset',      total: 25,   readyToDeploy: 20,  deployed: 4,  deadStock: 1, underService: 0, eol: 0, checked: false },
-      { id: '1210073021', name: 'Speakers',    type: 'Asset',      total: 18,   readyToDeploy: 14,  deployed: 3,  deadStock: 1, underService: 0, eol: 0, checked: false },
-      { id: '1210073022', name: 'Amplifiers',  type: 'Component',  total: 10,   readyToDeploy: 8,   deployed: 2,  deadStock: 0, underService: 0, eol: 0, checked: false },
-    ],
-    'Stationery': [
-      { id: '1210073023', name: 'Markers',     type: 'Consumable', total: 500,  readyToDeploy: 400, deployed: 90, deadStock: 5, underService: 0, eol: 5, checked: false },
-      { id: '1210073024', name: 'Notebooks',   type: 'Consumable', total: 800,  readyToDeploy: 700, deployed: 90, deadStock: 5, underService: 0, eol: 5, checked: false },
-      { id: '1210073025', name: 'Pens',        type: 'Consumable', total: 1000, readyToDeploy: 900, deployed: 90, deadStock: 5, underService: 0, eol: 5, checked: false },
-    ],
-    'Housekeeping': [
-      { id: '1210073026', name: 'Mop Sets',    type: 'Consumable', total: 40,   readyToDeploy: 35,  deployed: 4,  deadStock: 1, underService: 0, eol: 0, checked: false },
-      { id: '1210073027', name: 'Vacuum',      type: 'Asset',      total: 10,   readyToDeploy: 8,   deployed: 2,  deadStock: 0, underService: 0, eol: 0, checked: false },
-    ],
-    'Furnitures': [
-      { id: '1210073028', name: 'Chairs',      type: 'Asset',      total: 500,  readyToDeploy: 450, deployed: 45, deadStock: 3, underService: 2, eol: 0, checked: false },
-      { id: '1210073029', name: 'Desks',       type: 'Asset',      total: 200,  readyToDeploy: 180, deployed: 18, deadStock: 1, underService: 1, eol: 0, checked: false },
-      { id: '1210073030', name: 'Conf. Tables',type: 'Asset',      total: 20,   readyToDeploy: 18,  deployed: 2,  deadStock: 0, underService: 0, eol: 0, checked: false },
-    ],
-  };
+  toggleTypeFilter(t: string): void {
+    const i = this.filterTypes.indexOf(t);
+    if (i === -1) this.filterTypes.push(t); else this.filterTypes.splice(i, 1);
+    this.currentPage = 1;
+  }
 
+  // ── data (grouped by category) ───────────────────────────────────────────────
+  private allAssets: Record<string, ReportAsset[]> = {};
+
+  // ── computed ─────────────────────────────────────────────────────────────────
   get assets(): ReportAsset[] {
-    const list = this.allAssets[this.activeDept] || [];
+    const list = this.allAssets[this.activeDept] ?? [];
     const q = this.searchQuery.toLowerCase().trim();
     return list.filter(a => {
-      const matchesSearch = !q || a.name.toLowerCase().includes(q) || a.type.toLowerCase().includes(q);
-      const matchesType   = this.filterTypes.length === 0 || this.filterTypes.includes(a.type);
-      return matchesSearch && matchesType;
+      const matchesSearch = !q || a.name.toLowerCase().includes(q);
+      return matchesSearch;
     });
   }
 
@@ -89,38 +65,85 @@ export class ReportsComponent implements OnInit, OnDestroy {
   }
 
   get totalPages(): number { return Math.max(1, Math.ceil(this.assets.length / PAGE_SIZE)); }
-
   get pageNumbers(): number[] { return Array.from({ length: this.totalPages }, (_, i) => i + 1); }
-
   get selectedCount(): number { return this.pagedAssets.filter(a => a.checked).length; }
 
-  constructor(private router: Router) {}
+  // summary totals for active dept
+  get deptTotal():        number { return this.assets.reduce((s, a) => s + a.total, 0); }
+  get deptReady():        number { return this.assets.reduce((s, a) => s + a.readyToDeploy, 0); }
+  get deptDeployed():     number { return this.assets.reduce((s, a) => s + a.deployed, 0); }
+  get deptDeadStock():    number { return this.assets.reduce((s, a) => s + a.deadStock, 0); }
+  get deptUnderService(): number { return this.assets.reduce((s, a) => s + a.underService, 0); }
+  get deptDamaged():      number { return this.assets.reduce((s, a) => s + a.damaged, 0); }
 
-  ngOnInit(): void {}
+  constructor(private router: Router, private assetService: AssetService) {}
+
+  ngOnInit(): void {
+    this.loadReport();
+  }
+
   ngOnDestroy(): void {}
+
+  private loadReport(): void {
+    this.isLoading = true;
+    this.apiError  = null;
+
+    this.assetService.getAssetStatusSummary().subscribe({
+      next: (response: any) => {
+        // Shape: { statusCode, type, responseData: { data: { assets: [] } } }
+        const raw: any[] = response?.responseData?.data?.assets ?? [];
+
+        // Group rows by category
+        const grouped: Record<string, ReportAsset[]> = {};
+        raw.forEach((item, index) => {
+          const cat = item.category ?? 'Other';
+          if (!grouped[cat]) grouped[cat] = [];
+          grouped[cat].push({
+            id:           item.assetTagName ?? `TAG-${index + 1}`,
+            name:         item.assetTagName ?? '—',
+            category:     cat,
+            type:         'Asset',
+            total:        item.totalAssets    ?? 0,
+            readyToDeploy:item.ready          ?? 0,
+            deployed:     item.deployed       ?? 0,
+            deadStock:    item.deadStock       ?? 0,
+            underService: item.underMaintenance ?? 0,
+            damaged:      item.damaged         ?? 0,
+            checked:      false
+          });
+        });
+
+        this.allAssets   = grouped;
+        this.departments = Object.keys(grouped);
+        this.activeDept  = this.departments[0] ?? '';
+        this.isLoading   = false;
+      },
+      error: (err) => {
+        console.error('Failed to load asset status summary:', err);
+        this.apiError = 'Could not load report data from the server.';
+        this.isLoading = false;
+      }
+    });
+  }
 
   @HostListener('document:click')
   onDocumentClick(): void { this.sidebarOpen = false; this.filterOpen = false; }
 
-  selectDept(dept: string): void { this.activeDept = dept; this.currentPage = 1; this.allChecked = false; }
+  selectDept(dept: string): void {
+    this.activeDept  = dept;
+    this.currentPage = 1;
+    this.allChecked  = false;
+  }
 
   toggleFilterPanel(event: Event): void { event.stopPropagation(); this.filterOpen = !this.filterOpen; }
-
-  toggleTypeFilter(t: string): void {
-    const i = this.filterTypes.indexOf(t);
-    if (i === -1) this.filterTypes.push(t);
-    else this.filterTypes.splice(i, 1);
-    this.currentPage = 1;
-  }
 
   clearFilters(): void { this.filterTypes = []; this.currentPage = 1; }
 
   exportCSV(): void {
-    const rows = this.assets;
-    const headers = ['Name', 'ID', 'Type', 'Total', 'Ready to Deploy', 'Deployed', 'Dead Stock', 'Under Service', 'EOL'];
+    const headers = ['Asset Tag', 'Category', 'Total', 'Ready to Deploy', 'Deployed', 'Dead Stock', 'Under Service', 'Damaged'];
     const csv = [
       headers.join(','),
-      ...rows.map(a => [a.name, a.id, a.type, a.total, a.readyToDeploy, a.deployed, a.deadStock, a.underService, a.eol].join(','))
+      ...this.assets.map(a => [a.name, a.category, a.total, a.readyToDeploy, a.deployed, a.deadStock, a.underService, a.damaged].join(','))
     ].join('\n');
     this.downloadCSV(csv, `report-${this.activeDept}.csv`);
   }
@@ -144,8 +167,8 @@ export class ReportsComponent implements OnInit, OnDestroy {
 
   bulkExport(): void {
     const rows = this.pagedAssets.filter(a => a.checked);
-    const headers = ['Name', 'ID', 'Type', 'Total', 'Ready to Deploy', 'Deployed', 'Dead Stock', 'Under Service', 'EOL'];
-    const csv = [headers.join(','), ...rows.map(a => [a.name, a.id, a.type, a.total, a.readyToDeploy, a.deployed, a.deadStock, a.underService, a.eol].join(','))].join('\n');
+    const headers = ['Asset Tag', 'Category', 'Total', 'Ready to Deploy', 'Deployed', 'Dead Stock', 'Under Service', 'Damaged'];
+    const csv = [headers.join(','), ...rows.map(a => [a.name, a.category, a.total, a.readyToDeploy, a.deployed, a.deadStock, a.underService, a.damaged].join(','))].join('\n');
     this.downloadCSV(csv, `report-${this.activeDept}-selected.csv`);
   }
 
@@ -159,8 +182,8 @@ export class ReportsComponent implements OnInit, OnDestroy {
   clearSelection(): void { this.pagedAssets.forEach(a => a.checked = false); this.allChecked = false; }
 
   getTypeClass(type: string): string {
-    const map: any = { 'Asset': 'class-asset', 'Component': 'class-component', 'Consumable': 'class-consumable', 'Accessory': 'class-accessory' };
-    return map[type] || '';
+    const map: Record<string, string> = { 'Asset': 'class-asset', 'Component': 'class-component', 'Consumable': 'class-consumable', 'Accessory': 'class-accessory' };
+    return map[type] ?? '';
   }
 
   goToDashboard():  void { this.router.navigate(['/']); }

@@ -3,7 +3,6 @@ C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\constants\MicroserviceRoutingURLNames.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\constants\UrlPathAndQueryParams.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\AssetsHandler.java
-C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\HealthHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\MicroserviceStarter.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\router\MicroserviceRouter.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\router\RouterBase.java
@@ -12,4 +11,3 @@ C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\router\SubRouterBuilderBase.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\router\SubRouterBuilders.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\services\AssetsService.java
-C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\services\HealthService.java

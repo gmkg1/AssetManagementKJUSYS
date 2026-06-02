@@ -1,10 +1,8 @@
 in\edu\kristujayanti\router\MicroserviceRouter.class
-in\edu\kristujayanti\handlers\HealthHandler.class
 in\edu\kristujayanti\router\SubRouterBuilderBase.class
 in\edu\kristujayanti\router\SubRouterBuilders.class
 in\edu\kristujayanti\constants\UrlPathAndQueryParams.class
 in\edu\kristujayanti\services\AssetsService.class
-in\edu\kristujayanti\services\HealthService.class
 in\edu\kristujayanti\constants\MicroserviceRoutingURLNames.class
 in\edu\kristujayanti\MicroserviceStarter.class
 in\edu\kristujayanti\router\RouterBase.class
