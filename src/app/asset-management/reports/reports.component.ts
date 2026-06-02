@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 
 export interface ReportAsset {
@@ -167,4 +167,5 @@ export class ReportsComponent implements OnInit, OnDestroy {
   goToViewAssets(): void { this.router.navigate(['/assets/view']); }
   goToIssueAsset(): void { this.router.navigate(['/assets/issue']); }
   goToReturnLog():  void { this.router.navigate(['/assets/return-log']); }
+  goToIssueLog(): void { this.router.navigate(['/assets/issue-log']); }
 }

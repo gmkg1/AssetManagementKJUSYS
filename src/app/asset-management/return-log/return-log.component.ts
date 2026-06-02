@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 
 export interface ReturnRecord {
@@ -173,6 +173,7 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
   goToViewAssets(): void { this.router.navigate(['/assets/view']); }
   goToIssueAsset(): void { this.router.navigate(['/assets/issue']); }
   goToReports(): void    { this.router.navigate(['/assets/reports']); }
+  goToIssueLog(): void  { this.router.navigate(['/assets/issue-log']); }
 
   // ── Row click ─────────────────────────────────────────────────────────────────
   openDetail(row: ReturnRecord): void {

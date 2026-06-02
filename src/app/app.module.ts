@@ -1,5 +1,6 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
@@ -11,6 +12,7 @@ import { ViewAssetsComponent } from './asset-management/view-assets/view-assets.
 import { IssueAssetComponent } from './asset-management/issue-asset/issue-asset.component';
 import { ReturnLogComponent } from './asset-management/return-log/return-log.component';
 import { ReportsComponent } from './asset-management/reports/reports.component';
+import { IssueLogComponent } from './asset-management/issue-log/issue-log.component';
 
 @NgModule({
   declarations: [
@@ -20,9 +22,11 @@ import { ReportsComponent } from './asset-management/reports/reports.component';
     IssueAssetComponent,
     ReturnLogComponent,
     ReportsComponent,
+    IssueLogComponent,
   ],
   imports: [
     BrowserModule,
+    BrowserAnimationsModule,
     CommonModule,
     FormsModule,
     HttpClientModule,
