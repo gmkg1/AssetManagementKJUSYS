@@ -223,12 +223,27 @@
 
         </div>
 
+        <!-- Error message -->
+        <div *ngIf="errorMessage" class="mt-4 px-4 py-2.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600 flex items-center gap-2">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" class="w-4 h-4 flex-shrink-0">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/>
+          </svg>
+          {{ errorMessage }}
+        </div>
+
         <!-- Actions -->
         <div class="flex justify-end gap-3 mt-5 pt-4 border-t border-slate-100">
           <button class="h-8 px-5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:border-slate-400 hover:text-slate-800 transition-all duration-150 active:scale-95"
-            (click)="goBack()">Cancel</button>
-          <button class="h-8 px-5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-all duration-150 active:scale-95"
-            (click)="onSubmit()">Issue Asset</button>
+            [disabled]="isLoading" (click)="goBack()">Cancel</button>
+          <button class="h-8 px-5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-all duration-150 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+            [disabled]="isLoading" (click)="onSubmit()">
+            <!-- Spinner shown while loading -->
+            <svg *ngIf="isLoading" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            {{ isLoading ? 'Issuing...' : 'Issue Asset' }}
+          </button>
         </div>
       </div>
 

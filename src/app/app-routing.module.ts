@@ -5,14 +5,18 @@ import { ViewAssetsComponent } from './asset-management/view-assets/view-assets.
 import { IssueAssetComponent } from './asset-management/issue-asset/issue-asset.component';
 import { ReturnLogComponent } from './asset-management/return-log/return-log.component';
 import { ReportsComponent } from './asset-management/reports/reports.component';
+import { CreateAssetTagComponent } from './asset-management/create-asset-tag/create-asset-tag.component';
+import { CreateAssetComponent } from './asset-management/create-asset/create-asset.component';
 
 const routes: Routes = [
-  { path: '',                  component: AssetDashboardComponent, pathMatch: 'full' },
-  { path: 'assets/view',       component: ViewAssetsComponent },
-  { path: 'assets/issue',      component: IssueAssetComponent },
-  { path: 'assets/return-log', component: ReturnLogComponent },
-  { path: 'assets/reports',    component: ReportsComponent },
-  { path: '**',                redirectTo: '' },
+  { path: '',                    component: AssetDashboardComponent, pathMatch: 'full' },
+  { path: 'assets/view',         component: ViewAssetsComponent },
+  { path: 'assets/issue',        component: IssueAssetComponent },
+  { path: 'assets/return-log',   component: ReturnLogComponent },
+  { path: 'assets/reports',      component: ReportsComponent },
+  { path: 'assets/create-tag',   component: CreateAssetTagComponent },
+  { path: 'assets/create',       component: CreateAssetComponent },
+  { path: '**',                  redirectTo: '' },
 ];
 
 @NgModule({

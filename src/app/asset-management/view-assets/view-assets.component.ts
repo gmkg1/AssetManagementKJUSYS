@@ -151,6 +151,10 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
 
   goToReports(): void { this.router.navigate(['/assets/reports']); }
 
+  goToCreateAssetTag(): void { this.router.navigate(['/assets/create-tag']); }
+
+  goToCreateAsset(): void { this.router.navigate(['/assets/create']); }
+
   issueAsset(asset: Asset): void {
     this.router.navigate(['/assets/issue'], {
       queryParams: {

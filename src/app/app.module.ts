@@ -11,6 +11,8 @@ import { ViewAssetsComponent } from './asset-management/view-assets/view-assets.
 import { IssueAssetComponent } from './asset-management/issue-asset/issue-asset.component';
 import { ReturnLogComponent } from './asset-management/return-log/return-log.component';
 import { ReportsComponent } from './asset-management/reports/reports.component';
+import { CreateAssetTagComponent } from './asset-management/create-asset-tag/create-asset-tag.component';
+import { CreateAssetComponent } from './asset-management/create-asset/create-asset.component';
 
 @NgModule({
   declarations: [
@@ -20,6 +22,8 @@ import { ReportsComponent } from './asset-management/reports/reports.component';
     IssueAssetComponent,
     ReturnLogComponent,
     ReportsComponent,
+    CreateAssetTagComponent,
+    CreateAssetComponent,
   ],
   imports: [
     BrowserModule,
