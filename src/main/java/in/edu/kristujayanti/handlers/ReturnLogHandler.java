@@ -3,6 +3,7 @@ package in.edu.kristujayanti.handlers;
 import in.edu.kristujayanti.enums.ResponseType;
 import in.edu.kristujayanti.enums.StatusCode;
 import in.edu.kristujayanti.services.AssetsService;
+import in.edu.kristujayanti.util.PaginatedResult;
 import in.edu.kristujayanti.util.ResponseUtil;
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpServerResponse;
@@ -31,31 +32,41 @@ public class ReturnLogHandler implements Handler<RoutingContext> {
 
     try {
 
-      LOGGER.info("Handling request for AssetsHandler");
+      LOGGER.info("Handling request for ReturnLogHandler");
 
-      String path =
-        routingContext.normalizedPath();
+      int page = Integer.parseInt(
+        routingContext.request()
+          .getParam("page") == null
+          ? "1"
+          : routingContext.request().getParam("page")
+      );
 
-      JsonArray result;
+      int pageSize = Integer.parseInt(
+        routingContext.request()
+          .getParam("pageSize") == null
+          ? "10"
+          : routingContext.request().getParam("pageSize")
+      );
 
-      // CATEGORY COUNT API
-
-
-        result =
-          assetsService.getReturnLogs();
-
+      PaginatedResult<JsonObject> result =
+        assetsService.getReturnLogs(page, pageSize);
 
       ResponseUtil.createResponse(
         response,
         ResponseType.SUCCESS,
         StatusCode.TWOHUNDRED,
-        new JsonObject().put("assets", result),
+        new JsonObject()
+          .put("data", new JsonArray(result.getData()))
+          .put("totalRecords", result.getTotalRecords())
+          .put("currentPage", result.getCurrentPage())
+          .put("pageSize", result.getPageSize())
+          .put("totalPages", result.getTotalPages()),
         new JsonArray()
       );
 
     } catch (Exception e) {
 
-      LOGGER.error("Error in AssetsHandler", e);
+      LOGGER.error("Error in ReturnLogHandler", e);
 
       ResponseUtil.createResponse(
         response,

@@ -3,6 +3,7 @@ package in.edu.kristujayanti.handlers;
 import in.edu.kristujayanti.enums.ResponseType;
 import in.edu.kristujayanti.enums.StatusCode;
 import in.edu.kristujayanti.services.AssetsService;
+import in.edu.kristujayanti.util.PaginatedResult;
 import in.edu.kristujayanti.util.ResponseUtil;
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpServerResponse;
@@ -12,56 +13,111 @@ import io.vertx.ext.web.RoutingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class GetAssetsStatusSummary implements Handler<RoutingContext> {
+public class GetAssetsStatusSummary
+  implements Handler<RoutingContext> {
 
   private static final Logger LOGGER =
-    LoggerFactory.getLogger(GetAssetsStatusSummary.class);
+    LoggerFactory.getLogger(
+      GetAssetsStatusSummary.class);
 
   private final AssetsService assetsService;
 
-  public GetAssetsStatusSummary(AssetsService assetsService) {
+  public GetAssetsStatusSummary(
+    AssetsService assetsService) {
+
     this.assetsService = assetsService;
   }
 
   @Override
-  public void handle(RoutingContext routingContext) {
+  public void handle(
+    RoutingContext routingContext) {
 
     HttpServerResponse response =
       routingContext.response();
 
     try {
 
-      LOGGER.info("Handling request for AssetsHandler");
+      LOGGER.info(
+        "Handling request for Asset Status Summary");
 
-      String path =
-        routingContext.normalizedPath();
+      int page = Integer.parseInt(
+        routingContext.request()
+          .getParam("page") != null
+          ? routingContext.request()
+          .getParam("page")
+          : "1"
+      );
 
-      JsonArray result;
+      int pageSize = Integer.parseInt(
+        routingContext.request()
+          .getParam("pageSize") != null
+          ? routingContext.request()
+          .getParam("pageSize")
+          : "10"
+      );
 
-      // CATEGORY COUNT API
+      page = Math.max(page, 1);
+      pageSize = Math.max(
+        1,
+        Math.min(pageSize, 100)
+      );
 
+      PaginatedResult<JsonObject> result =
+        assetsService.getAssetStatusSummary(
+          page,
+          pageSize
+        );
 
-        result = assetsService.getAssetStatusSummary();
+      JsonArray assets = new JsonArray();
 
+      result.getData().forEach(
+        assets::add
+      );
+
+      JsonObject responseData =
+        new JsonObject()
+          .put("assets", assets)
+          .put(
+            "totalRecords",
+            result.getTotalRecords()
+          )
+          .put(
+            "currentPage",
+            result.getCurrentPage()
+          )
+          .put(
+            "pageSize",
+            result.getPageSize()
+          )
+          .put(
+            "totalPages",
+            result.getTotalPages()
+          );
 
       ResponseUtil.createResponse(
         response,
         ResponseType.SUCCESS,
         StatusCode.TWOHUNDRED,
-        new JsonObject().put("assets", result),
+        responseData,
         new JsonArray()
       );
 
     } catch (Exception e) {
 
-      LOGGER.error("Error in AssetsHandler", e);
+      LOGGER.error(
+        "Error in GetAssetsStatusSummary",
+        e
+      );
 
       ResponseUtil.createResponse(
         response,
         ResponseType.ERROR,
         StatusCode.INTERNAL_SERVER_ERROR,
         new JsonObject()
-          .put("error", "Internal Server Error"),
+          .put(
+            "error",
+            "Internal Server Error"
+          ),
         new JsonArray()
       );
     }

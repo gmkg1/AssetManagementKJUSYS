@@ -3,6 +3,7 @@ package in.edu.kristujayanti.handlers;
 import in.edu.kristujayanti.enums.ResponseType;
 import in.edu.kristujayanti.enums.StatusCode;
 import in.edu.kristujayanti.services.AssetsService;
+import in.edu.kristujayanti.util.PaginatedResult;
 import in.edu.kristujayanti.util.ResponseUtil;
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpServerResponse;
@@ -31,33 +32,56 @@ public class IssuedAssetsHandler implements Handler<RoutingContext> {
 
     try {
 
-      LOGGER.info("Handling request for AssetsHandler");
+      LOGGER.info("Handling request for IssuedAssetsHandler");
 
-      String path =
-        routingContext.normalizedPath();
+      int page = Integer.parseInt(
+        routingContext.request()
+          .getParam("page") != null
+          ? routingContext.request().getParam("page")
+          : "1"
+      );
 
-      JsonArray result;
+      int pageSize = Integer.parseInt(
+        routingContext.request()
+          .getParam("pageSize") != null
+          ? routingContext.request().getParam("pageSize")
+          : "10"
+      );
 
-      // CATEGORY COUNT API
+      page = Math.max(page, 1);
+      pageSize = Math.max(1, Math.min(pageSize, 100));
 
-      // ISSUED ASSETS DETAILED API
+      PaginatedResult<JsonObject> result =
+        assetsService.getIssuedAssetsDetailed(
+          page,
+          pageSize
+        );
 
+      JsonArray assets = new JsonArray();
 
-        result =
-          assetsService.getIssuedAssetsDetailed();
-      
+      result.getData().forEach(assets::add);
+
+      JsonObject responseData = new JsonObject()
+        .put("assets", assets)
+        .put("totalRecords", result.getTotalRecords())
+        .put("currentPage", result.getCurrentPage())
+        .put("pageSize", result.getPageSize())
+        .put("totalPages", result.getTotalPages());
 
       ResponseUtil.createResponse(
         response,
         ResponseType.SUCCESS,
         StatusCode.TWOHUNDRED,
-        new JsonObject().put("assets", result),
+        responseData,
         new JsonArray()
       );
 
     } catch (Exception e) {
 
-      LOGGER.error("Error in AssetsHandler", e);
+      LOGGER.error(
+        "Error in IssuedAssetsHandler",
+        e
+      );
 
       ResponseUtil.createResponse(
         response,
