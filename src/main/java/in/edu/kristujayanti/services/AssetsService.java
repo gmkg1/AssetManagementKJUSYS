@@ -11,248 +11,384 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Date;
 import java.util.ArrayList;
+import in.edu.kristujayanti.util.PaginatedResult;
+
+
 public class AssetsService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AssetsService.class);
     private static final String ASSETS_COLLECTION = "assets";
 
     private final MongoDatabase mongoDatabase;
+    private Document createFacetStage(int page, int pageSize) {
+
+      int skip = (page - 1) * pageSize;
+
+      return new Document("$facet",
+        new Document("data",
+          List.of(
+            new Document("$skip", skip),
+            new Document("$limit", pageSize)
+          ))
+          .append("metadata",
+            List.of(
+              new Document("$count", "totalRecords")
+            )));
+    }
+
+    private long getTotalRecords(Document facetResult) {
+
+      List<Document> metadata =
+        facetResult.getList("metadata", Document.class);
+
+      if (metadata == null || metadata.isEmpty()) {
+        return 0;
+      }
+
+      Number count =
+        (Number) metadata.get(0).get("totalRecords");
+
+      return count.longValue();
+    }
 
     public AssetsService(MongoDatabase mongoDatabase) {
         this.mongoDatabase = mongoDatabase;
     }
 
-    public JsonArray getAssets() {
 
-        LOGGER.info("Fetching detailed assets");
 
-        JsonArray result = new JsonArray();
+      public PaginatedResult<JsonObject> getAssets(
+      int page,
+      int pageSize) {
 
-        MongoCollection<Document> collection =
-                mongoDatabase.getCollection(ASSETS_COLLECTION);
+      LOGGER.info("Fetching detailed assets page={} pageSize={}",
+        page,
+        pageSize);
 
-        List<Document> pipeline = List.of(
+      MongoCollection<Document> collection =
+        mongoDatabase.getCollection(ASSETS_COLLECTION);
 
-                // =========================
-                // JOIN ASSET TAG
-                // =========================
-                new Document("$lookup",
-                        new Document("from", "assettags")
-                                .append("localField", "assetTagId")
-                                .append("foreignField", "_id")
-                                .append("as", "assetTag")
-                ),
+      int skip = (page - 1) * pageSize;
 
-                new Document("$unwind", "$assetTag"),
+      List<Document> pipeline = new ArrayList<>();
 
-                // =========================
-                // JOIN CATEGORY
-                // =========================
-                new Document("$lookup",
-                        new Document("from", "categories")
-                                .append("localField", "assetTag.categoryId")
-                                .append("foreignField", "_id")
-                                .append("as", "category")
-                ),
+      // =========================
+      // JOIN ASSET TAG
+      // =========================
+      pipeline.add(
+        new Document("$lookup",
+          new Document("from", "assettags")
+            .append("localField", "assetTagId")
+            .append("foreignField", "_id")
+            .append("as", "assetTag"))
+      );
 
-                new Document("$unwind", "$category"),
+      pipeline.add(
+        new Document("$unwind", "$assetTag")
+      );
 
-                // =========================
-                // JOIN CAMPUS
-                // =========================
-                new Document("$lookup",
-                        new Document("from", "campuses")
-                                .append("localField", "campusId")
-                                .append("foreignField", "_id")
-                                .append("as", "campus")
-                ),
+      // =========================
+      // JOIN CATEGORY
+      // =========================
+      pipeline.add(
+        new Document("$lookup",
+          new Document("from", "categories")
+            .append("localField", "assetTag.categoryId")
+            .append("foreignField", "_id")
+            .append("as", "category"))
+      );
 
-                new Document("$unwind", "$campus"),
+      pipeline.add(
+        new Document("$unwind", "$category")
+      );
 
-                // =========================
-                // JOIN STATUS
-                // =========================
-                new Document("$lookup",
-                        new Document("from", "status")
-                                .append("localField", "statusId")
-                                .append("foreignField", "_id")
-                                .append("as", "status")
-                ),
+      // =========================
+      // JOIN CAMPUS
+      // =========================
+      pipeline.add(
+        new Document("$lookup",
+          new Document("from", "campuses")
+            .append("localField", "campusId")
+            .append("foreignField", "_id")
+            .append("as", "campus"))
+      );
 
-                new Document("$unwind", "$status"),
+      pipeline.add(
+        new Document("$unwind", "$campus")
+      );
 
-                // =========================
-                // JOIN LOCATION
-                // =========================
-                new Document("$lookup",
-                        new Document("from", "locations")
-                                .append("localField", "locationId")
-                                .append("foreignField", "_id")
-                                .append("as", "location")
-                ),
+      // =========================
+      // JOIN STATUS
+      // =========================
+      pipeline.add(
+        new Document("$lookup",
+          new Document("from", "status")
+            .append("localField", "statusId")
+            .append("foreignField", "_id")
+            .append("as", "status"))
+      );
 
-                new Document("$unwind", "$location"),
+      pipeline.add(
+        new Document("$unwind", "$status")
+      );
 
-                // =========================
-                // JOIN ISSUE TO
-                // =========================
-                new Document("$lookup",
-                        new Document("from", "issueto")
-                                .append("localField", "_id")
-                                .append("foreignField", "assetId")
-                                .append("as", "issueInfo")
-                ),
+      // =========================
+      // JOIN LOCATION
+      // =========================
+      pipeline.add(
+        new Document("$lookup",
+          new Document("from", "locations")
+            .append("localField", "locationId")
+            .append("foreignField", "_id")
+            .append("as", "location"))
+      );
 
-                // Keep even if not issued
-                new Document("$unwind",
-                        new Document("path", "$issueInfo")
-                                .append("preserveNullAndEmptyArrays", true)
-                ),
+      pipeline.add(
+        new Document("$unwind", "$location")
+      );
 
-                // =========================
-                // JOIN ISSUED LOCATION
-                // =========================
-                new Document("$lookup",
-                        new Document("from", "locations")
-                                .append("localField", "issueInfo.locationId")
-                                .append("foreignField", "_id")
-                                .append("as", "issuedLocation")
-                ),
+      // =========================
+      // JOIN ISSUE TO
+      // =========================
+      pipeline.add(
+        new Document("$lookup",
+          new Document("from", "issueto")
+            .append("localField", "_id")
+            .append("foreignField", "assetId")
+            .append("as", "issueInfo"))
+      );
 
-                new Document("$unwind",
-                        new Document("path", "$issuedLocation")
-                                .append("preserveNullAndEmptyArrays", true)
-                ),
+      pipeline.add(
+        new Document("$unwind",
+          new Document("path", "$issueInfo")
+            .append("preserveNullAndEmptyArrays", true))
+      );
 
-                // =========================
-                // JOIN ISSUED ASSET
-                // =========================
-                new Document("$lookup",
-                        new Document("from", "assets")
-                                .append("localField", "issueInfo.issuedToAssetId")
-                                .append("foreignField", "_id")
-                                .append("as", "issuedAsset")
-                ),
+      // =========================
+      // JOIN ISSUED LOCATION
+      // =========================
+      pipeline.add(
+        new Document("$lookup",
+          new Document("from", "locations")
+            .append("localField", "issueInfo.locationId")
+            .append("foreignField", "_id")
+            .append("as", "issuedLocation"))
+      );
 
-                new Document("$unwind",
-                        new Document("path", "$issuedAsset")
-                                .append("preserveNullAndEmptyArrays", true)
-                )
-        );
+      pipeline.add(
+        new Document("$unwind",
+          new Document("path", "$issuedLocation")
+            .append("preserveNullAndEmptyArrays", true))
+      );
 
-        for (Document doc : collection.aggregate(pipeline)) {
+      // =========================
+      // JOIN ISSUED ASSET
+      // =========================
+      pipeline.add(
+        new Document("$lookup",
+          new Document("from", "assets")
+            .append("localField",
+              "issueInfo.issuedToAssetId")
+            .append("foreignField", "_id")
+            .append("as", "issuedAsset"))
+      );
 
-            JsonObject json = new JsonObject();
+      pipeline.add(
+        new Document("$unwind",
+          new Document("path", "$issuedAsset")
+            .append("preserveNullAndEmptyArrays", true))
+      );
+
+      // =========================
+      // FACET
+      // =========================
+      pipeline.add(
+        new Document("$facet",
+          new Document("data",
+            List.of(
+              new Document("$skip", skip),
+              new Document("$limit", pageSize)
+            ))
+            .append("metadata",
+              List.of(
+                new Document("$count",
+                  "totalRecords")
+              )))
+      );
+
+      Document facetResult =
+        collection.aggregate(pipeline).first();
+
+      List<JsonObject> result =
+        new ArrayList<>();
+
+      long totalRecords = 0;
+
+      if (facetResult != null) {
+
+        List<Document> metadata =
+          facetResult.getList(
+            "metadata",
+            Document.class);
+
+        if (metadata != null && !metadata.isEmpty()) {
+
+          Number count =
+            (Number) metadata.get(0)
+              .get("totalRecords");
+
+          totalRecords =
+            count.longValue();
+        }
+
+        List<Document> data =
+          facetResult.getList(
+            "data",
+            Document.class);
+
+        if (data != null) {
+
+          for (Document doc : data) {
+
+            JsonObject json =
+              new JsonObject();
 
             // =========================
             // BASIC DETAILS
             // =========================
             json.put("assetName",
-                    doc.getString("assetName"));
+              doc.getString("assetName"));
 
             json.put("model",
-                    ((Document) doc.get("assetTag"))
-                            .getString("assetTagName"));
+              ((Document) doc.get("assetTag"))
+                .getString("assetTagName"));
 
             json.put("category",
-                    ((Document) doc.get("category"))
-                            .getString("categoryName"));
+              ((Document) doc.get("category"))
+                .getString("categoryName"));
 
             json.put("status",
-                    ((Document) doc.get("status"))
-                            .getString("statusName"));
+              ((Document) doc.get("status"))
+                .getString("statusName"));
 
             json.put("issuable",
-                    doc.getBoolean("isIssuable"));
+              doc.getBoolean("isIssuable"));
 
             // =========================
             // LOCATION
             // =========================
             Document locationDoc =
-                    (Document) doc.get("location");
+              (Document) doc.get("location");
 
             if (locationDoc != null) {
 
-                json.put("location",
-                        locationDoc.getString("locationName"));
+              json.put("location",
+                locationDoc.getString(
+                  "locationName"));
 
             } else {
 
-                json.put("location", "N/A");
+              json.put("location",
+                "N/A");
             }
 
             // =========================
             // BLOCK NAME
             // =========================
-            String blockId = doc.getString("blockId");
+            String blockId =
+              doc.getString("blockId");
 
             Document campusDoc =
-                    (Document) doc.get("campus");
+              (Document) doc.get("campus");
 
-            String blockName = "N/A";
+            String blockName =
+              "N/A";
 
             if (campusDoc != null) {
 
-                List<Document> blocks =
-                        (List<Document>) campusDoc.get("blocks");
+              List<Document> blocks =
+                (List<Document>)
+                  campusDoc.get(
+                    "blocks");
 
-                if (blocks != null) {
+              if (blocks != null) {
 
-                    for (Document block : blocks) {
+                for (Document block : blocks) {
 
-                        if (blockId.equals(block.getString("blockId"))) {
+                  if (blockId != null &&
+                    blockId.equals(
+                      block.getString(
+                        "blockId"))) {
 
-                            blockName = block.getString("blockName");
-                            break;
-                        }
-                    }
+                    blockName =
+                      block.getString(
+                        "blockName");
+
+                    break;
+                  }
                 }
+              }
             }
 
-            json.put("block", blockName);
+            json.put("block",
+              blockName);
 
             // =========================
             // ISSUED TO
             // =========================
-            String issuedTo = "Not Issued";
+            String issuedTo =
+              "Not Issued";
 
             Document issueInfo =
-                    (Document) doc.get("issueInfo");
+              (Document) doc.get(
+                "issueInfo");
 
             if (issueInfo != null) {
 
-                ObjectId personId =
-                        issueInfo.getObjectId("personId");
+              ObjectId personId =
+                issueInfo.getObjectId(
+                  "personId");
 
-                Document issuedLocation =
-                        (Document) doc.get("issuedLocation");
+              Document issuedLocation =
+                (Document) doc.get(
+                  "issuedLocation");
 
-                Document issuedAsset =
-                        (Document) doc.get("issuedAsset");
+              Document issuedAsset =
+                (Document) doc.get(
+                  "issuedAsset");
 
-                if (issuedLocation != null) {
+              if (issuedLocation != null) {
 
-                    issuedTo =
-                            issuedLocation.getString("locationName");
+                issuedTo =
+                  issuedLocation.getString(
+                    "locationName");
 
-                } else if (issuedAsset != null) {
+              } else if (issuedAsset != null) {
 
-                    issuedTo =
-                            issuedAsset.getString("assetName");
+                issuedTo =
+                  issuedAsset.getString(
+                    "assetName");
 
-                } else if (personId != null) {
+              } else if (personId != null) {
 
-                    issuedTo =
-                            personId.toHexString();
-                }
+                issuedTo =
+                  personId.toHexString();
+              }
             }
 
-            json.put("issuedTo", issuedTo);
+            json.put("issuedTo",
+              issuedTo);
 
             result.add(json);
+          }
         }
+      }
 
-        return result;
+      return new PaginatedResult<>(
+        result,
+        totalRecords,
+        page,
+        pageSize);
     }
     public JsonArray getAssetCountGroupedByCategory() {
 
@@ -316,396 +452,563 @@ public class AssetsService {
         return result;
     }
 
-    public JsonArray getIssuedAssetsDetailed() {
+  public PaginatedResult<JsonObject> getIssuedAssetsDetailed(
+    int page,
+    int pageSize) {
 
-        LOGGER.info("Fetching issued assets detailed data");
+    LOGGER.info(
+      "Fetching issued assets detailed data page={} pageSize={}",
+      page,
+      pageSize);
 
-        JsonArray result = new JsonArray();
+    MongoCollection<Document> issueCollection =
+      mongoDatabase.getCollection("issueto");
 
-        MongoCollection<Document> issueCollection =
-                mongoDatabase.getCollection("issueto");
+    MongoCollection<Document> assetsCollection =
+      mongoDatabase.getCollection("assets");
 
-        MongoCollection<Document> assetsCollection =
-                mongoDatabase.getCollection("assets");
+    MongoCollection<Document> locationsCollection =
+      mongoDatabase.getCollection("locations");
 
-        MongoCollection<Document> locationsCollection =
-                mongoDatabase.getCollection("locations");
+    MongoCollection<Document> assetTagsCollection =
+      mongoDatabase.getCollection("assettags");
 
-        MongoCollection<Document> assetTagsCollection =
-                mongoDatabase.getCollection("assettags");
+    MongoCollection<Document> categoriesCollection =
+      mongoDatabase.getCollection("categories");
 
-        MongoCollection<Document> categoriesCollection =
-                mongoDatabase.getCollection("categories");
+    int skip = (page - 1) * pageSize;
 
-        List<Document> issuedDocs =
-                issueCollection.find().into(new ArrayList<>());
+    long totalRecords =
+      issueCollection.countDocuments();
 
-        for (Document issueDoc : issuedDocs) {
+    List<Document> issuedDocs =
+      issueCollection.find()
+        .skip(skip)
+        .limit(pageSize)
+        .into(new ArrayList<>());
 
-            JsonObject json = new JsonObject();
+    List<JsonObject> result =
+      new ArrayList<>();
 
-            ObjectId assetId = issueDoc.getObjectId("assetId");
+    for (Document issueDoc : issuedDocs) {
 
-            // FETCH ASSET
-            Document assetDoc = assetsCollection.find(
-                    new Document("_id", assetId)
-            ).first();
+      JsonObject json = new JsonObject();
 
-            if (assetDoc != null) {
+      ObjectId assetId =
+        issueDoc.getObjectId("assetId");
 
-                json.put("assetName",
-                        assetDoc.getString("assetName"));
+      Document assetDoc =
+        assetsCollection.find(
+            new Document("_id", assetId))
+          .first();
 
-                // FETCH ASSET TAG
-                ObjectId assetTagId =
-                        assetDoc.getObjectId("assetTagId");
+      if (assetDoc != null) {
 
-                Document assetTagDoc = assetTagsCollection.find(
-                        new Document("_id", assetTagId)
-                ).first();
+        json.put(
+          "assetName",
+          assetDoc.getString("assetName"));
 
-                if (assetTagDoc != null) {
+        ObjectId assetTagId =
+          assetDoc.getObjectId("assetTagId");
 
-                    // FETCH CATEGORY
-                    ObjectId categoryId =
-                            assetTagDoc.getObjectId("categoryId");
+        Document assetTagDoc =
+          assetTagsCollection.find(
+              new Document("_id",
+                assetTagId))
+            .first();
 
-                    Document categoryDoc = categoriesCollection.find(
-                            new Document("_id", categoryId)
-                    ).first();
+        if (assetTagDoc != null) {
 
-                    if (categoryDoc != null) {
+          ObjectId categoryId =
+            assetTagDoc.getObjectId(
+              "categoryId");
 
-                        json.put("assetCategory",
-                                categoryDoc.getString("categoryName"));
-                    }
-                }
-            }
+          Document categoryDoc =
+            categoriesCollection.find(
+                new Document("_id",
+                  categoryId))
+              .first();
 
-            // ISSUE DATE
-            json.put("issueDate",
-                    dateToString(issueDoc.getDate("issueDate")));
+          if (categoryDoc != null) {
 
-            // RECEIVER LOGIC
-            ObjectId locationId =
-                    issueDoc.getObjectId("locationId");
-
-            ObjectId issuedToAssetId =
-                    issueDoc.getObjectId("issuedToAssetId");
-
-            ObjectId personId =
-                    issueDoc.getObjectId("personId");
-
-            // IF LOCATION
-            if (locationId != null) {
-
-                Document locationDoc = locationsCollection.find(
-                        new Document("_id", locationId)
-                ).first();
-
-                if (locationDoc != null) {
-
-                    json.put("receiverName",
-                            locationDoc.getString("locationName"));
-
-                    json.put("receiverType", "Location");
-                }
-            }
-
-            // IF ASSET
-            else if (issuedToAssetId != null) {
-
-                Document issuedAssetDoc = assetsCollection.find(
-                        new Document("_id", issuedToAssetId)
-                ).first();
-
-                if (issuedAssetDoc != null) {
-
-                    json.put("receiverName",
-                            issuedAssetDoc.getString("assetName"));
-
-                    json.put("receiverType", "Asset");
-                }
-            }
-
-            // IF PERSON
-            else if (personId != null) {
-
-                json.put("receiverName",
-                        objectIdToString(personId));
-
-                json.put("receiverType", "Person");
-            }
-
-            result.add(json);
+            json.put(
+              "assetCategory",
+              categoryDoc.getString(
+                "categoryName"));
+          }
         }
+      }
 
-        return result;
+      json.put(
+        "issueDate",
+        dateToString(
+          issueDoc.getDate("issueDate")));
+
+      ObjectId locationId =
+        issueDoc.getObjectId("locationId");
+
+      ObjectId issuedToAssetId =
+        issueDoc.getObjectId("issuedToAssetId");
+
+      ObjectId personId =
+        issueDoc.getObjectId("personId");
+
+      if (locationId != null) {
+
+        Document locationDoc =
+          locationsCollection.find(
+              new Document("_id",
+                locationId))
+            .first();
+
+        if (locationDoc != null) {
+
+          json.put(
+            "receiverName",
+            locationDoc.getString(
+              "locationName"));
+
+          json.put(
+            "receiverType",
+            "Location");
+        }
+      }
+
+      else if (issuedToAssetId != null) {
+
+        Document issuedAssetDoc =
+          assetsCollection.find(
+              new Document("_id",
+                issuedToAssetId))
+            .first();
+
+        if (issuedAssetDoc != null) {
+
+          json.put(
+            "receiverName",
+            issuedAssetDoc.getString(
+              "assetName"));
+
+          json.put(
+            "receiverType",
+            "Asset");
+        }
+      }
+
+      else if (personId != null) {
+
+        json.put(
+          "receiverName",
+          objectIdToString(personId));
+
+        json.put(
+          "receiverType",
+          "Person");
+      }
+
+      result.add(json);
     }
-    public JsonArray getAssetStatusSummary() {
 
-        JsonArray result = new JsonArray();
+    return new PaginatedResult<>(
+      result,
+      totalRecords,
+      page,
+      pageSize);
+  }
+  public PaginatedResult<JsonObject> getAssetStatusSummary(
+    int page,
+    int pageSize) {
 
-        MongoCollection<Document> collection =
-                mongoDatabase.getCollection("assets");
+    LOGGER.info(
+      "Fetching asset status summary page={} pageSize={}",
+      page,
+      pageSize);
 
-        List<Document> pipeline = List.of(
+    int skip = (page - 1) * pageSize;
 
-                // Join Asset Tags
-                new Document("$lookup",
-                        new Document("from", "assettags")
-                                .append("localField", "assetTagId")
-                                .append("foreignField", "_id")
-                                .append("as", "assetTag")),
+    MongoCollection<Document> collection =
+      mongoDatabase.getCollection("assets");
 
-                new Document("$unwind", "$assetTag"),
+    List<Document> pipeline = new ArrayList<>();
 
-                // Join Categories
-                new Document("$lookup",
-                        new Document("from", "categories")
-                                .append("localField", "assetTag.categoryId")
-                                .append("foreignField", "_id")
-                                .append("as", "category")),
+    pipeline.add(new Document("$lookup",
+      new Document("from", "assettags")
+        .append("localField", "assetTagId")
+        .append("foreignField", "_id")
+        .append("as", "assetTag")));
 
-                new Document("$unwind", "$category"),
+    pipeline.add(new Document("$unwind", "$assetTag"));
 
-                // Join Status
-                new Document("$lookup",
-                        new Document("from", "status")
-                                .append("localField", "statusId")
-                                .append("foreignField", "_id")
-                                .append("as", "status")),
+    pipeline.add(new Document("$lookup",
+      new Document("from", "categories")
+        .append("localField", "assetTag.categoryId")
+        .append("foreignField", "_id")
+        .append("as", "category")));
 
-                new Document("$unwind", "$status"),
+    pipeline.add(new Document("$unwind", "$category"));
 
-                // Group by Asset Tag
-                new Document("$group",
-                        new Document("_id",
-                                new Document("assetTagId", "$assetTag._id")
-                                        .append("assetTagName", "$assetTag.assetTagName")
-                                        .append("categoryName", "$category.categoryName"))
+    pipeline.add(new Document("$lookup",
+      new Document("from", "status")
+        .append("localField", "statusId")
+        .append("foreignField", "_id")
+        .append("as", "status")));
 
-                                .append("totalAssets",
-                                        new Document("$sum", "$quantity"))
+    pipeline.add(new Document("$unwind", "$status"));
 
-                                .append("ready",
-                                        new Document("$sum",
-                                                new Document("$cond",
-                                                        List.of(
-                                                                new Document("$eq",
-                                                                        List.of("$status.statusName",
-                                                                                "Ready to Deploy")),
-                                                                "$quantity",
-                                                                0))))
+    pipeline.add(new Document("$group",
+      new Document("_id",
+        new Document("assetTagId", "$assetTag._id")
+          .append("assetTagName",
+            "$assetTag.assetTagName")
+          .append("categoryName",
+            "$category.categoryName"))
 
-                                .append("deployed",
-                                        new Document("$sum",
-                                                new Document("$cond",
-                                                        List.of(
-                                                                new Document("$eq",
-                                                                        List.of("$status.statusName",
-                                                                                "Deployed")),
-                                                                "$quantity",
-                                                                0))))
+        .append("totalAssets",
+          new Document("$sum", "$quantity"))
 
-                                .append("deadStock",
-                                        new Document("$sum",
-                                                new Document("$cond",
-                                                        List.of(
-                                                                new Document("$eq",
-                                                                        List.of("$status.statusName",
-                                                                                "Dead Stock")),
-                                                                "$quantity",
-                                                                0))))
+        .append("ready",
+          new Document("$sum",
+            new Document("$cond",
+              List.of(
+                new Document("$eq",
+                  List.of(
+                    "$status.statusName",
+                    "Ready to Deploy")),
+                "$quantity",
+                0))))
 
-                                .append("underMaintenance",
-                                        new Document("$sum",
-                                                new Document("$cond",
-                                                        List.of(
-                                                                new Document("$eq",
-                                                                        List.of("$status.statusName",
-                                                                                "Under Maintenance")),
-                                                                "$quantity",
-                                                                0))))
+        .append("deployed",
+          new Document("$sum",
+            new Document("$cond",
+              List.of(
+                new Document("$eq",
+                  List.of(
+                    "$status.statusName",
+                    "Deployed")),
+                "$quantity",
+                0))))
 
-                                .append("damaged",
-                                        new Document("$sum",
-                                                new Document("$cond",
-                                                        List.of(
-                                                                new Document("$eq",
-                                                                        List.of("$status.statusName",
-                                                                                "Damaged")),
-                                                                "$quantity",
-                                                                0))))
-                )
+        .append("deadStock",
+          new Document("$sum",
+            new Document("$cond",
+              List.of(
+                new Document("$eq",
+                  List.of(
+                    "$status.statusName",
+                    "Dead Stock")),
+                "$quantity",
+                0))))
+
+        .append("underMaintenance",
+          new Document("$sum",
+            new Document("$cond",
+              List.of(
+                new Document("$eq",
+                  List.of(
+                    "$status.statusName",
+                    "Under Maintenance")),
+                "$quantity",
+                0))))
+
+        .append("damaged",
+          new Document("$sum",
+            new Document("$cond",
+              List.of(
+                new Document("$eq",
+                  List.of(
+                    "$status.statusName",
+                    "Damaged")),
+                "$quantity",
+                0))))
+    ));
+
+    pipeline.add(
+      new Document("$facet",
+        new Document("metadata",
+          List.of(
+            new Document("$count",
+              "totalRecords")
+          ))
+          .append("data",
+            List.of(
+              new Document("$skip", skip),
+              new Document("$limit",
+                pageSize)
+            ))
+      )
+    );
+
+    Document facetResult =
+      collection.aggregate(pipeline)
+        .first();
+
+    List<JsonObject> result =
+      new ArrayList<>();
+
+    long totalRecords = 0;
+
+    if (facetResult != null) {
+
+      List<Document> metadata =
+        (List<Document>) facetResult.get(
+          "metadata");
+
+      if (!metadata.isEmpty()) {
+
+        totalRecords =
+          metadata.get(0)
+            .getInteger(
+              "totalRecords",
+              0);
+      }
+
+      List<Document> data =
+        (List<Document>) facetResult.get(
+          "data");
+
+      for (Document doc : data) {
+
+        Document id =
+          (Document) doc.get("_id");
+
+        result.add(
+          new JsonObject()
+            .put(
+              "assetTagName",
+              id.getString(
+                "assetTagName"))
+            .put(
+              "category",
+              id.getString(
+                "categoryName"))
+            .put(
+              "totalAssets",
+              doc.getInteger(
+                "totalAssets",
+                0))
+            .put(
+              "ready",
+              doc.getInteger(
+                "ready",
+                0))
+            .put(
+              "deployed",
+              doc.getInteger(
+                "deployed",
+                0))
+            .put(
+              "deadStock",
+              doc.getInteger(
+                "deadStock",
+                0))
+            .put(
+              "underMaintenance",
+              doc.getInteger(
+                "underMaintenance",
+                0))
+            .put(
+              "damaged",
+              doc.getInteger(
+                "damaged",
+                0))
+        );
+      }
+    }
+
+    return new PaginatedResult<>(
+      result,
+      totalRecords,
+      page,
+      pageSize);
+  }
+
+
+  //Facet  - skip , limit and then paginated Result
+  public PaginatedResult<JsonObject> getReturnLogs(
+    int page,
+    int pageSize) {
+
+    LOGGER.info(
+      "Fetching return logs page={} pageSize={}",
+      page,
+      pageSize);
+
+    int skip = (page - 1) * pageSize;
+
+    MongoCollection<Document> returnCollection =
+      mongoDatabase.getCollection("returnto");
+
+    List<Document> pipeline = new ArrayList<>();
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "assets")
+        .append("localField", "assetId")
+        .append("foreignField", "_id")
+        .append("as", "asset")));
+
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$asset")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "assettags")
+        .append("localField", "asset.assetTagId")
+        .append("foreignField", "_id")
+        .append("as", "assetTag")));
+
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$assetTag")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "categories")
+        .append("localField", "assetTag.categoryId")
+        .append("foreignField", "_id")
+        .append("as", "category")));
+
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$category")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "locations")
+        .append("localField", "locationId")
+        .append("foreignField", "_id")
+        .append("as", "location")));
+
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$location")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "assets")
+        .append("localField", "returnedToAssetId")
+        .append("foreignField", "_id")
+        .append("as", "returnedAsset")));
+
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$returnedAsset")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$project",
+      new Document("assetName", "$asset.assetName")
+        .append("category", "$category.categoryName")
+        .append("total", "$asset.quantity")
+        .append("returnDate", "$returnDate")
+        .append("locationName", "$location.locationName")
+        .append("returnedAssetName", "$returnedAsset.assetName")
+        .append("personId", "$personId")
+        .append("locationId", "$locationId")
+        .append("returnedToAssetId", "$returnedToAssetId")));
+
+    pipeline.add(
+      new Document("$facet",
+        new Document("metadata",
+          List.of(
+            new Document("$count",
+              "totalRecords")
+          ))
+          .append("data",
+            List.of(
+              new Document("$skip", skip),
+              new Document("$limit", pageSize)
+            ))
+      )
+    );
+
+    Document facetResult =
+      returnCollection.aggregate(pipeline)
+        .first();
+
+    long totalRecords = 0;
+
+    List<JsonObject> result =
+      new ArrayList<>();
+
+    if (facetResult != null) {
+
+      List<Document> metadata =
+        (List<Document>) facetResult.get("metadata");
+
+      if (!metadata.isEmpty()) {
+
+        totalRecords =
+          metadata.get(0)
+            .getInteger("totalRecords", 0);
+      }
+
+      List<Document> data =
+        (List<Document>) facetResult.get("data");
+
+      for (Document doc : data) {
+
+        JsonObject json = new JsonObject();
+
+        json.put(
+          "assetName",
+          doc.getString("assetName"));
+
+        json.put(
+          "category",
+          doc.getString("category"));
+
+        json.put(
+          "total",
+          doc.getInteger("total", 0));
+
+        json.put(
+          "returnDate",
+          doc.getDate("returnDate") != null
+            ? dateToString(
+            doc.getDate("returnDate"))
+            : null
         );
 
-        for (Document doc : collection.aggregate(pipeline)) {
+        String issuedFor = "Unknown";
+        String returnType = "Unknown";
 
-            Document id = (Document) doc.get("_id");
+        if (doc.get("locationId") != null) {
 
-            JsonObject json = new JsonObject()
-                    .put("assetTagName", id.getString("assetTagName"))
-                    .put("category", id.getString("categoryName"))
-                    .put("totalAssets", doc.getInteger("totalAssets", 0))
-                    .put("ready", doc.getInteger("ready", 0))
-                    .put("deployed", doc.getInteger("deployed", 0))
-                    .put("deadStock", doc.getInteger("deadStock", 0))
-                    .put("underMaintenance", doc.getInteger("underMaintenance", 0))
-                    .put("damaged", doc.getInteger("damaged", 0));
+          issuedFor =
+            doc.getString("locationName");
 
-            result.add(json);
+          returnType =
+            "Location";
+
+        } else if (doc.get("personId") != null) {
+
+          issuedFor =
+            doc.getObjectId("personId")
+              .toHexString();
+
+          returnType =
+            "Person";
+
+        } else if (doc.get("returnedToAssetId") != null) {
+
+          issuedFor =
+            doc.getString(
+              "returnedAssetName");
+
+          returnType =
+            "Asset";
         }
 
-        return result;
-    }
-    public JsonArray getReturnLogs() {
+        json.put("issuedFor", issuedFor);
+        json.put("returnType", returnType);
 
-        LOGGER.info("Fetching return logs");
-
-        JsonArray result = new JsonArray();
-
-        MongoCollection<Document> returnCollection =
-                mongoDatabase.getCollection("returnto");
-
-        List<Document> pipeline = new ArrayList<>();
-
-        // =========================
-        // JOIN ASSETS
-        // =========================
-        pipeline.add(new Document("$lookup",
-                new Document("from", "assets")
-                        .append("localField", "assetId")
-                        .append("foreignField", "_id")
-                        .append("as", "asset")
-        ));
-
-        pipeline.add(new Document("$unwind",
-                new Document("path", "$asset")
-                        .append("preserveNullAndEmptyArrays", true)
-        ));
-
-        // =========================
-        // JOIN ASSET TAGS
-        // =========================
-        pipeline.add(new Document("$lookup",
-                new Document("from", "assettags")
-                        .append("localField", "asset.assetTagId")
-                        .append("foreignField", "_id")
-                        .append("as", "assetTag")
-        ));
-
-        pipeline.add(new Document("$unwind",
-                new Document("path", "$assetTag")
-                        .append("preserveNullAndEmptyArrays", true)
-        ));
-
-        // =========================
-        // JOIN CATEGORY
-        // =========================
-        pipeline.add(new Document("$lookup",
-                new Document("from", "categories")
-                        .append("localField", "assetTag.categoryId")
-                        .append("foreignField", "_id")
-                        .append("as", "category")
-        ));
-
-        pipeline.add(new Document("$unwind",
-                new Document("path", "$category")
-                        .append("preserveNullAndEmptyArrays", true)
-        ));
-
-        // =========================
-        // JOIN LOCATION
-        // =========================
-        pipeline.add(new Document("$lookup",
-                new Document("from", "locations")
-                        .append("localField", "locationId")
-                        .append("foreignField", "_id")
-                        .append("as", "location")
-        ));
-
-        pipeline.add(new Document("$unwind",
-                new Document("path", "$location")
-                        .append("preserveNullAndEmptyArrays", true)
-        ));
-
-        // =========================
-        // JOIN RETURNED ASSET
-        // =========================
-        pipeline.add(new Document("$lookup",
-                new Document("from", "assets")
-                        .append("localField", "returnedToAssetId")
-                        .append("foreignField", "_id")
-                        .append("as", "returnedAsset")
-        ));
-
-        pipeline.add(new Document("$unwind",
-                new Document("path", "$returnedAsset")
-                        .append("preserveNullAndEmptyArrays", true)
-        ));
-
-        // =========================
-        // BASIC PROJECT (NO LOGIC HERE)
-        // =========================
-        pipeline.add(new Document("$project",
-                new Document("assetName", "$asset.assetName")
-                        .append("category", "$category.categoryName")
-                        .append("total", "$asset.quantity")
-                        .append("returnDate", "$returnDate")
-                        .append("locationName", "$location.locationName")
-                        .append("returnedAssetName", "$returnedAsset.assetName")
-                        .append("personId", "$personId")
-                        .append("locationId", "$locationId")
-                        .append("returnedToAssetId", "$returnedToAssetId")
-        ));
-
-        // =========================
-        // EXECUTION + LOGIC IN JAVA
-        // =========================
-        for (Document doc : returnCollection.aggregate(pipeline)) {
-
-            JsonObject json = new JsonObject();
-
-            json.put("assetName", doc.getString("assetName"));
-            json.put("category", doc.getString("category"));
-            json.put("total", doc.getInteger("total", 0));
-
-            json.put("returnDate",
-                    doc.getDate("returnDate") != null
-                            ? dateToString(doc.getDate("returnDate"))
-                            : null
-            );
-
-            String issuedFor = "Unknown";
-            String returnType = "Unknown";
-
-            if (doc.get("locationId") != null) {
-
-                issuedFor = doc.getString("locationName");
-                returnType = "Location";
-
-            } else if (doc.get("personId") != null) {
-
-                issuedFor = doc.getObjectId("personId").toHexString();
-                returnType = "Person";
-
-            } else if (doc.get("returnedToAssetId") != null) {
-
-                issuedFor = doc.getString("returnedAssetName");
-                returnType = "Asset";
-            }
-
-            json.put("issuedFor", issuedFor);
-            json.put("returnType", returnType);
-
-            result.add(json);
-        }
-
-        return result;
+        result.add(json);
+      }
     }
 
-    private JsonObject toJson(Document asset) {
+    return new PaginatedResult<>(
+      result,
+      totalRecords,
+      page,
+      pageSize);
+  }
+
+  private JsonObject toJson(Document asset) {
         return new JsonObject()
                 .put("_id", objectIdToString(asset.getObjectId("_id")))
                 .put("purchaseCost", asset.getInteger("purchaseCost"))

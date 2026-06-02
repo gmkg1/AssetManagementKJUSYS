@@ -5,10 +5,8 @@ import com.mongodb.client.MongoDatabase;
 import in.edu.kristujayanti.constants.CommonKeys;
 import in.edu.kristujayanti.constants.ContextRoutingURLName;
 import in.edu.kristujayanti.constants.MicroserviceRoutingURLNames;
-import in.edu.kristujayanti.handlers.AssetsHandler;
+import in.edu.kristujayanti.handlers.*;
 import in.edu.kristujayanti.services.AssetsService;
-import in.edu.kristujayanti.services.HealthService;
-import in.edu.kristujayanti.handlers.HealthHandler;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpHeaders;
@@ -26,103 +24,91 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * MicroserviceRouter sets up the main application routes and handlers.
- * It extends the RouterBase to utilize common properties and methods for
- * routing.
- */
-public class MicroserviceRouter extends RouterBase {
+ * MicroserviceRouter sets up the main application routes and handlers. * It extends the RouterBase to utilize common properties and methods for * routing. */public class MicroserviceRouter extends RouterBase {
 
-        /**
-         * Constructs a ReportOrchestratorRouter with necessary dependencies.
-         *
-         * @param router                 the Vert.x router
-         * @param redisCommandConnection the Redis connection
-         * @param mongoDatabase          the MongoDB database
-         * @param mongoClient            the MongoDB client
-         * @param client                 the Vert.x WebClient
-         */
-        public MicroserviceRouter(Router router, Redis redisCommandConnection, MongoDatabase mongoDatabase,
-                        MongoClient mongoClient, WebClient client, JsonObject apiInfo, Vertx vertx) {
-                super(router, redisCommandConnection, mongoDatabase, mongoClient, client, apiInfo, vertx);
-        }
+  /**
+   * Constructs a ReportOrchestratorRouter with necessary dependencies.         *         * @param router                 the Vert.x router
+   * @param redisCommandConnection the Redis connection
+   * @param mongoDatabase          the MongoDB database
+   * @param mongoClient            the MongoDB client
+   * @param client                 the Vert.x WebClient
+   */        public MicroserviceRouter(Router router, Redis redisCommandConnection, MongoDatabase mongoDatabase,
+                                       MongoClient mongoClient, WebClient client, JsonObject apiInfo, Vertx vertx) {
+    super(router, redisCommandConnection, mongoDatabase, mongoClient, client, apiInfo, vertx);
+  }
 
-        /**
-         * Sets up the application routes with handlers.
-         */
-        public void setUpRouters() {
-                // Define allowed headers for CORS
-                Set<String> allowHeaders = Stream.of(
-                                CommonKeys.CONTENT_TYPE,
-                                CommonKeys.X_AUTH_CORRELATION_ID,
-                                HttpHeaders.AUTHORIZATION.toString(),
-                                "Access-Control-Allow-Origin").collect(Collectors.toSet());
+  /**
+   * Sets up the application routes with handlers.         */        public void setUpRouters() {
+    // Define allowed headers for CORS
+    Set<String> allowHeaders = Stream.of(
+      CommonKeys.CONTENT_TYPE,
+      CommonKeys.X_AUTH_CORRELATION_ID,
+      HttpHeaders.AUTHORIZATION.toString(),
+      "Access-Control-Allow-Origin").collect(Collectors.toSet());
 
-                // Define allowed HTTP methods for CORS
-                Set<HttpMethod> allowMethods = Stream.of(
-                                HttpMethod.GET,
-                                HttpMethod.POST,
-                                HttpMethod.PUT).collect(Collectors.toSet());
+    // Define allowed HTTP methods for CORS
+    Set<HttpMethod> allowMethods = Stream.of(
+      HttpMethod.GET,
+      HttpMethod.POST,
+      HttpMethod.PUT).collect(Collectors.toSet());
 
-                // Setup CORS and Body Handlers
-                this.router.route().handler(CorsHandler.create()
-                                .addOrigin("*")
-                                .allowCredentials(true)
-                                .allowedHeaders(allowHeaders)
-                                .allowedMethods(allowMethods));
+    // Setup CORS and Body Handlers
+    this.router.route().handler(CorsHandler.create()
+      .addOrigin("*")
+      .allowCredentials(true)
+      .allowedHeaders(allowHeaders)
+      .allowedMethods(allowMethods));
 
-                // add routes here
-                // health route
-                HealthService healthService = new HealthService(this.mongoDatabase);
-                addRoute(HttpMethod.GET, MicroserviceRoutingURLNames.HEALTH_URL, new HealthHandler(healthService));
+    // add routes here
+    // health route                HealthService healthService = new HealthService(this.mongoDatabase);
 
-                // assets route
+
+    // assets route
 // assets service
-                AssetsService assetsService =
-                        new AssetsService(this.mongoDatabase);
+    AssetsService assetsService =
+      new AssetsService(this.mongoDatabase);
 
 // normal assets API
-                addRoute(
-                        HttpMethod.GET,
-                        MicroserviceRoutingURLNames.ASSETS_URL,
-                        new AssetsHandler(assetsService)
-                );
+    addRoute(
+      HttpMethod.GET,
+      MicroserviceRoutingURLNames.ASSETS_URL,
+      new AssetsHandler(assetsService)
+    );
 
 // category count API
-                addRoute(
-                        HttpMethod.GET,
-                        "/assets/category-count",
-                        new AssetsHandler(assetsService)
-                );
+    addRoute(
+      HttpMethod.GET,
+      MicroserviceRoutingURLNames.CATEGORIES,
+      new GetCategoryCountHandler(assetsService)
+    );
 
 // issued assets detailed API
-                addRoute(
-                        HttpMethod.GET,
-                        "/assets/issued-assets",
-                        new AssetsHandler(assetsService)
-                );
-                addRoute(
-                        HttpMethod.GET,
-                        "/assets/asset-status-summary",
-                        new AssetsHandler(assetsService)
-                );
-                // return logs API
-                addRoute(
-                        HttpMethod.GET,
-                        "/assets/return-logs",
-                        new AssetsHandler(assetsService)
-                );
-        }
+    addRoute(
+      HttpMethod.GET,
+      MicroserviceRoutingURLNames.ISSUEDASSETS,
+      new IssuedAssetsHandler(assetsService)
+    );
+    addRoute(
+      HttpMethod.GET,
+      MicroserviceRoutingURLNames.ASSETSTATUSSUMMARY,
+      new GetAssetsStatusSummary(assetsService)
+    );
+    // return logs API
+    addRoute(
+      HttpMethod.GET,
+      MicroserviceRoutingURLNames.RETURN,
+      new ReturnLogHandler(assetsService)
+    );
 
-        /**
-         * Helper method to add routes with the specified method, path, and handler.
-         *
-         * @param method  the HTTP method
-         * @param path    the URL path
-         * @param handler the request handler
-         */
-        private void addRoute(HttpMethod method, String path, Handler<RoutingContext> handler) {
-                this.router.route(method, ContextRoutingURLName.MICROSERVICE_CONTEXT_URL_NAME.concat(path))
-                                .handler(BodyHandler.create())
-                                .blockingHandler(handler);
-        }
+  }
+
+  /**
+   * Helper method to add routes with the specified method, path, and handler.         *         * @param method  the HTTP method
+   * @param path    the URL path
+   * @param handler the request handler
+   */        private void addRoute(HttpMethod method, String path, Handler<RoutingContext> handler) {
+    this.router.route(method, ContextRoutingURLName.MICROSERVICE_CONTEXT_URL_NAME.concat(path))
+      .handler(BodyHandler.create())
+      .blockingHandler(handler);
+  }
 }
