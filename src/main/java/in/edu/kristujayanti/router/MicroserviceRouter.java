@@ -105,6 +105,12 @@ public class MicroserviceRouter extends RouterBase {
                         "/assets/asset-status-summary",
                         new AssetsHandler(assetsService)
                 );
+                // return logs API
+                addRoute(
+                        HttpMethod.GET,
+                        "/assets/return-logs",
+                        new AssetsHandler(assetsService)
+                );
         }
 
         /**

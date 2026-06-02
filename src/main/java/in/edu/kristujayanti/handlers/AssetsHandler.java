@@ -53,7 +53,13 @@ public class AssetsHandler implements Handler<RoutingContext> {
             }else if (path.contains("asset-status-summary")) {
 
                 result = assetsService.getAssetStatusSummary();
+            }// RETURN LOGS API
+            else if (path.contains("return-logs")) {
+
+                result =
+                        assetsService.getReturnLogs();
             }
+
 
             // NORMAL ASSETS API
             else {

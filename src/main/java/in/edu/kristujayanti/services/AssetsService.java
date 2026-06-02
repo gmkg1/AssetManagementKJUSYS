@@ -559,6 +559,152 @@ public class AssetsService {
 
         return result;
     }
+    public JsonArray getReturnLogs() {
+
+        LOGGER.info("Fetching return logs");
+
+        JsonArray result = new JsonArray();
+
+        MongoCollection<Document> returnCollection =
+                mongoDatabase.getCollection("returnto");
+
+        List<Document> pipeline = new ArrayList<>();
+
+        // =========================
+        // JOIN ASSETS
+        // =========================
+        pipeline.add(new Document("$lookup",
+                new Document("from", "assets")
+                        .append("localField", "assetId")
+                        .append("foreignField", "_id")
+                        .append("as", "asset")
+        ));
+
+        pipeline.add(new Document("$unwind",
+                new Document("path", "$asset")
+                        .append("preserveNullAndEmptyArrays", true)
+        ));
+
+        // =========================
+        // JOIN ASSET TAGS
+        // =========================
+        pipeline.add(new Document("$lookup",
+                new Document("from", "assettags")
+                        .append("localField", "asset.assetTagId")
+                        .append("foreignField", "_id")
+                        .append("as", "assetTag")
+        ));
+
+        pipeline.add(new Document("$unwind",
+                new Document("path", "$assetTag")
+                        .append("preserveNullAndEmptyArrays", true)
+        ));
+
+        // =========================
+        // JOIN CATEGORY
+        // =========================
+        pipeline.add(new Document("$lookup",
+                new Document("from", "categories")
+                        .append("localField", "assetTag.categoryId")
+                        .append("foreignField", "_id")
+                        .append("as", "category")
+        ));
+
+        pipeline.add(new Document("$unwind",
+                new Document("path", "$category")
+                        .append("preserveNullAndEmptyArrays", true)
+        ));
+
+        // =========================
+        // JOIN LOCATION
+        // =========================
+        pipeline.add(new Document("$lookup",
+                new Document("from", "locations")
+                        .append("localField", "locationId")
+                        .append("foreignField", "_id")
+                        .append("as", "location")
+        ));
+
+        pipeline.add(new Document("$unwind",
+                new Document("path", "$location")
+                        .append("preserveNullAndEmptyArrays", true)
+        ));
+
+        // =========================
+        // JOIN RETURNED ASSET
+        // =========================
+        pipeline.add(new Document("$lookup",
+                new Document("from", "assets")
+                        .append("localField", "returnedToAssetId")
+                        .append("foreignField", "_id")
+                        .append("as", "returnedAsset")
+        ));
+
+        pipeline.add(new Document("$unwind",
+                new Document("path", "$returnedAsset")
+                        .append("preserveNullAndEmptyArrays", true)
+        ));
+
+        // =========================
+        // BASIC PROJECT (NO LOGIC HERE)
+        // =========================
+        pipeline.add(new Document("$project",
+                new Document("assetName", "$asset.assetName")
+                        .append("category", "$category.categoryName")
+                        .append("total", "$asset.quantity")
+                        .append("returnDate", "$returnDate")
+                        .append("locationName", "$location.locationName")
+                        .append("returnedAssetName", "$returnedAsset.assetName")
+                        .append("personId", "$personId")
+                        .append("locationId", "$locationId")
+                        .append("returnedToAssetId", "$returnedToAssetId")
+        ));
+
+        // =========================
+        // EXECUTION + LOGIC IN JAVA
+        // =========================
+        for (Document doc : returnCollection.aggregate(pipeline)) {
+
+            JsonObject json = new JsonObject();
+
+            json.put("assetName", doc.getString("assetName"));
+            json.put("category", doc.getString("category"));
+            json.put("total", doc.getInteger("total", 0));
+
+            json.put("returnDate",
+                    doc.getDate("returnDate") != null
+                            ? dateToString(doc.getDate("returnDate"))
+                            : null
+            );
+
+            String issuedFor = "Unknown";
+            String returnType = "Unknown";
+
+            if (doc.get("locationId") != null) {
+
+                issuedFor = doc.getString("locationName");
+                returnType = "Location";
+
+            } else if (doc.get("personId") != null) {
+
+                issuedFor = doc.getObjectId("personId").toHexString();
+                returnType = "Person";
+
+            } else if (doc.get("returnedToAssetId") != null) {
+
+                issuedFor = doc.getString("returnedAssetName");
+                returnType = "Asset";
+            }
+
+            json.put("issuedFor", issuedFor);
+            json.put("returnType", returnType);
+
+            result.add(json);
+        }
+
+        return result;
+    }
+
     private JsonObject toJson(Document asset) {
         return new JsonObject()
                 .put("_id", objectIdToString(asset.getObjectId("_id")))
