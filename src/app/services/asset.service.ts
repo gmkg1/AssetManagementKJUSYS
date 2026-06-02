@@ -11,29 +11,28 @@ export class AssetService {
 
   constructor(private http: HttpClient) {}
 
-  /** GET /assets — full asset list with joins */
+  /** GET /assets */
   getAssets() {
-    return this.http.get<{ assets: any[] }>(`${this.baseUrl}/assets`);
-
-  }
-  getCategoryCounts() {
-    return this.http.get(
-      'http://localhost:8080/kjusys-api/asset-management-api/assets/category-count'
-    );
+    return this.http.get<any>(`${this.baseUrl}/assets`);
   }
 
-  /** GET /assets/category-count — asset count grouped by category */
+  /** GET /categories */
   getCategoryCount() {
-    return this.http.get<any>(`${this.baseUrl}/assets/category-count`);
+    return this.http.get<any>(`${this.baseUrl}/categories`);
   }
 
-  /** GET /assets/issued-assets — detailed issued assets */
+  /** GET /issued-assets — detailed issued assets */
   getIssuedAssets() {
-    return this.http.get<any>(`${this.baseUrl}/assets/issued-assets`);
+    return this.http.get<any>(`${this.baseUrl}/issued-assets`);
   }
 
-  /** GET /assets/asset-status-summary — per-tag status breakdown */
+  /** GET /return-logs */
+  getReturnLogs() {
+    return this.http.get<any>(`${this.baseUrl}/return-logs`);
+  }
+
+  /** GET /asset-status-summary */
   getAssetStatusSummary() {
-    return this.http.get<any>(`${this.baseUrl}/assets/asset-status-summary`);
+    return this.http.get<any>(`${this.baseUrl}/asset-status-summary`);
   }
 }

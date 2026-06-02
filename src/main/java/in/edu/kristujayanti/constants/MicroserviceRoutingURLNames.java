@@ -13,5 +13,11 @@ public interface MicroserviceRoutingURLNames {
     String HEALTH_URL = "/health";
 
     String ASSETS_URL = "/assets";
+    String CATEGORIES = "/categories";
+    String RETURN = "/return-logs";
+    String ASSETSTATUSSUMMARY = "/asset-status-summary";
+    String ISSUEDASSETS = "/issued-assets";
+
+
 
 }

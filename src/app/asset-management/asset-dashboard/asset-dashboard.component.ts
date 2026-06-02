@@ -117,11 +117,10 @@ export class AssetDashboardComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.apiError = null;
 
+    // Category cards
     this.assetService.getCategoryCount().subscribe({
       next: (response: any) => {
-        // Real shape: { statusCode, type, responseData: { data: { assets: [] }, message: [] } }
         const categories: any[] = response?.responseData?.data?.assets ?? [];
-
         this.departments = categories.map(cat => {
           const icon = CATEGORY_ICON_MAP[cat.categoryName] ?? DEFAULT_ICON;
           return {
@@ -134,7 +133,6 @@ export class AssetDashboardComponent implements OnInit, OnDestroy {
             iconPath: icon.iconPath
           };
         });
-
         this.totalAssets = this.departments.reduce((sum, d) => sum + d.count, 0);
       },
       error: (err) => {
@@ -143,26 +141,35 @@ export class AssetDashboardComponent implements OnInit, OnDestroy {
       }
     });
 
+    // Issue history table
     this.assetService.getIssuedAssets().subscribe({
       next: (response: any) => {
-        // Real shape: { statusCode, type, responseData: { data: { assets: [] }, message: [] } }
         const issued: any[] = response?.responseData?.data?.assets ?? [];
-
         this.issueHistory = issued.slice(0, 10).map(item => ({
           receiverName: item.receiverName ?? 'Unknown',
-          department: item.receiverType ?? '—',
-          issueDate: item.issueDate
+          department:   item.receiverType ?? '—',
+          issueDate:    item.issueDate
             ? new Date(item.issueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
             : '—',
           assetDept: item.assetCategory ?? '—'
         }));
-
-        this.deployed = issued.length;
-        this.readyToDeploy = Math.max(0, this.totalAssets - this.deployed);
-        this.isLoading = false;
       },
       error: (err) => {
         console.error('Failed to load issued assets:', err);
+      }
+    });
+
+    // Assets by status donut — use asset-status-summary for accurate totals
+    this.assetService.getAssetStatusSummary().subscribe({
+      next: (response: any) => {
+        const rows: any[] = response?.responseData?.data?.assets ?? [];
+        this.readyToDeploy = rows.reduce((sum, r) => sum + (r.ready ?? 0), 0);
+        this.deployed      = rows.reduce((sum, r) => sum + (r.deployed ?? 0), 0);
+        this.totalAssets   = rows.reduce((sum, r) => sum + (r.totalAssets ?? 0), 0);
+        this.isLoading     = false;
+      },
+      error: (err) => {
+        console.error('Failed to load asset status summary:', err);
         this.isLoading = false;
       }
     });

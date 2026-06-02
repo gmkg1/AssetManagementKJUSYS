@@ -5,7 +5,7 @@ import com.mongodb.client.MongoDatabase;
 import in.edu.kristujayanti.constants.CommonKeys;
 import in.edu.kristujayanti.constants.ContextRoutingURLName;
 import in.edu.kristujayanti.constants.MicroserviceRoutingURLNames;
-import in.edu.kristujayanti.handlers.AssetsHandler;
+import in.edu.kristujayanti.handlers.*;
 import in.edu.kristujayanti.services.AssetsService;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
@@ -78,26 +78,26 @@ import java.util.stream.Stream;
 // category count API
     addRoute(
       HttpMethod.GET,
-      "/assets/category-count",
-      new AssetsHandler(assetsService)
+      MicroserviceRoutingURLNames.CATEGORIES,
+      new GetCategoryCountHandler(assetsService)
     );
 
 // issued assets detailed API
     addRoute(
       HttpMethod.GET,
-      "/assets/issued-assets",
-      new AssetsHandler(assetsService)
+      MicroserviceRoutingURLNames.ISSUEDASSETS,
+      new IssuedAssetsHandler(assetsService)
     );
     addRoute(
       HttpMethod.GET,
-      "/assets/asset-status-summary",
-      new AssetsHandler(assetsService)
+      MicroserviceRoutingURLNames.ASSETSTATUSSUMMARY,
+      new GetAssetsStatusSummary(assetsService)
     );
     // return logs API
     addRoute(
       HttpMethod.GET,
-      "/assets/return-logs",
-      new AssetsHandler(assetsService)
+      MicroserviceRoutingURLNames.RETURN,
+      new ReturnLogHandler(assetsService)
     );
 
   }
