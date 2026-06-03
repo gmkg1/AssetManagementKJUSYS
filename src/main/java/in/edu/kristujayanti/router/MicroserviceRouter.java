@@ -104,6 +104,11 @@ import java.util.stream.Stream;
       MicroserviceRoutingURLNames.GRP,
       new AssetGroupingHandler(assetsService)
     );
+    addRoute(
+            HttpMethod.GET,
+            MicroserviceRoutingURLNames.STATUS,
+            new GetStatusCountHandler(assetsService)
+    );
 
   }
 
