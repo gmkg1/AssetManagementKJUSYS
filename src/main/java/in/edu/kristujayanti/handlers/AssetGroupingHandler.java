@@ -38,7 +38,9 @@ public class AssetGroupingHandler implements Handler<RoutingContext> {
       String categoryId =
         routingContext.request()
           .getParam("categoryId");
-
+      String assetname =
+        routingContext.request()
+          .getParam("categoryId");
       if (categoryId == null || categoryId.isBlank()) {
 
         ResponseUtil.createResponse(
@@ -73,6 +75,7 @@ public class AssetGroupingHandler implements Handler<RoutingContext> {
       PaginatedResult<JsonObject> result =
         assetsService.getAssetsByCategory(
           categoryId,
+          assetname,
           page,
           pageSize
         );
