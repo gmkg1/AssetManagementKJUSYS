@@ -453,7 +453,54 @@ public class AssetsService {
 
         return result;
     }
+  public JsonArray getAssetCountGroupedByStatus() {
 
+    LOGGER.info("Fetching asset count grouped by status");
+
+    JsonArray result = new JsonArray();
+
+    MongoCollection<Document> collection =
+            mongoDatabase.getCollection(ASSETS_COLLECTION);
+
+    List<Document> pipeline = List.of(
+
+            // JOIN statuses
+            new Document("$lookup",
+                    new Document("from", "status")
+                            .append("localField", "statusId")
+                            .append("foreignField", "_id")
+                            .append("as", "status")
+            ),
+
+            // Convert array -> object
+            new Document("$unwind", "$status"),
+
+            // GROUP by status
+            new Document("$group",
+                    new Document("_id", "$status._id")
+                            .append("statusName",
+                                    new Document("$first",
+                                            "$status.statusName"))
+                            .append("assetCount",
+                                    new Document("$sum", "$quantity"))
+            )
+    );
+
+    for (Document doc : collection.aggregate(pipeline)) {
+
+      JsonObject json = new JsonObject()
+              .put("statusId",
+                      objectIdToString(doc.getObjectId("_id")))
+              .put("statusName",
+                      doc.getString("statusName"))
+              .put("assetCount",
+                      doc.getInteger("assetCount"));
+
+      result.add(json);
+    }
+
+    return result;
+  }
   public PaginatedResult<JsonObject> getIssuedAssetsDetailed(
     int page,
     int pageSize) {
@@ -826,6 +873,7 @@ public class AssetsService {
 
   public PaginatedResult<JsonObject> getAssetsByCategory(
     String categoryId,
+    String assetName,
     int page,
     int pageSize) {
 

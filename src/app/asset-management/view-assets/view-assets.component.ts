@@ -111,10 +111,10 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
     );
   }
 
-  get totalCount():       number { return this.totalRecords; }
-  get availableCount():   number { return this.assets.filter(a => a.status === 'Ready to Deploy').length; }
-  get deployedCount():    number { return this.assets.filter(a => a.status === 'Deployed').length; }
-  get maintenanceCount(): number { return this.assets.filter(a => a.status === 'Under Maintenance').length; }
+  totalCount = 0;
+  availableCount = 0;
+  deployedCount = 0;
+  maintenanceCount = 0;
 
   assetsDropdownOpen = false;
   sidebarOpen = false;
@@ -154,6 +154,8 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.apiError  = null;
 
+    this.loadStatusCounts();
+
     this.assetService.getAssetsByCategory(this.activeCategory.id, this.currentPage, this.pageSize).subscribe({
       next: (response: any) => {
         const data = response?.responseData?.data ?? {};
@@ -170,6 +172,35 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
         console.error('Failed to load assets:', err);
         this.apiError = 'Could not load assets from the server.';
         this.isLoading = false;
+      }
+    });
+  }
+
+  private loadStatusCounts(): void {
+    this.assetService.getStatusSummary().subscribe({
+      next: (response: any) => {
+        const rows: any[] = response?.responseData?.data?.assets ?? [];
+        let total = 0;
+        let readyToDeploy = 0;
+        let deployed = 0;
+        let maintenance = 0;
+        rows.forEach(r => {
+          total += r.assetCount ?? 0;
+          if (r.statusName === 'Ready to Deploy') {
+            readyToDeploy = r.assetCount ?? 0;
+          } else if (r.statusName === 'Deployed') {
+            deployed = r.assetCount ?? 0;
+          } else if (r.statusName === 'Under Maintenance') {
+            maintenance = r.assetCount ?? 0;
+          }
+        });
+        this.totalCount = total;
+        this.availableCount = readyToDeploy;
+        this.deployedCount = deployed;
+        this.maintenanceCount = maintenance;
+      },
+      error: (err: any) => {
+        console.error('Failed to load status counts:', err);
       }
     });
   }

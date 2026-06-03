@@ -99,10 +99,15 @@ import java.util.stream.Stream;
       MicroserviceRoutingURLNames.RETURN,
       new ReturnLogHandler(assetsService)
     );
-      addRoute(
+    addRoute(
       HttpMethod.GET,
       MicroserviceRoutingURLNames.GRP,
       new AssetGroupingHandler(assetsService)
+    );
+    addRoute(
+            HttpMethod.GET,
+            MicroserviceRoutingURLNames.STATUS,
+            new GetStatusCountHandler(assetsService)
     );
 
   }

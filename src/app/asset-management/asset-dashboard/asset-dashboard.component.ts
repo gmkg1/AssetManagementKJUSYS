@@ -159,17 +159,21 @@ export class AssetDashboardComponent implements OnInit, OnDestroy {
       }
     });
 
-    // Assets by status donut — use asset-status-summary for accurate totals
-    this.assetService.getAssetStatusSummary().subscribe({
+    // Assets by status donut — use /status endpoint for accurate totals
+    this.assetService.getStatusSummary().subscribe({
       next: (response: any) => {
         const rows: any[] = response?.responseData?.data?.assets ?? [];
-        this.readyToDeploy = rows.reduce((sum, r) => sum + (r.ready ?? 0), 0);
-        this.deployed      = rows.reduce((sum, r) => sum + (r.deployed ?? 0), 0);
-        this.totalAssets   = rows.reduce((sum, r) => sum + (r.totalAssets ?? 0), 0);
-        this.isLoading     = false;
+        this.readyToDeploy = 0;
+        this.deployed      = 0;
+        rows.forEach(r => {
+          if (r.statusName === 'Ready to Deploy') this.readyToDeploy = r.assetCount ?? 0;
+          if (r.statusName === 'Deployed')        this.deployed      = r.assetCount ?? 0;
+        });
+        this.totalAssets = this.readyToDeploy + this.deployed;
+        this.isLoading   = false;
       },
-      error: (err) => {
-        console.error('Failed to load asset status summary:', err);
+      error: (err: any) => {
+        console.error('Failed to load status summary:', err);
         this.isLoading = false;
       }
     });

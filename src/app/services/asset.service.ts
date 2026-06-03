@@ -11,6 +11,11 @@ export class AssetService {
 
   constructor(private http: HttpClient) {}
 
+  /** GET /status — asset counts by status for the dashboard donut */
+  getStatusSummary() {
+    return this.http.get<any>(`${this.baseUrl}/status`);
+  }
+
   /** GET /assets?page=X&size=Y */
   getAssets(page: number = 1, size: number = 10) {
     const params = new HttpParams().set('page', page.toString()).set('size', size.toString());
