@@ -3,9 +3,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Google Fonts – loaded via CSS, not inlined by Angular build */
-/* stylelint-disable-next-line import-notation */
-@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Inter:wght@300;400;500;700&family=Mulish:wght@400;600&family=Poppins:wght@400;600&family=Roboto:wght@400;500&display=swap');
+/* Google Fonts – used across asset management pages */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Mulish:wght@400;600;700&family=Roboto:wght@500&display=swap');
 
 /* Global reset */
 * {
