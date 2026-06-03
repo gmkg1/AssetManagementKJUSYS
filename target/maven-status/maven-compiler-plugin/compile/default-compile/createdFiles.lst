@@ -14,4 +14,5 @@ in\edu\kristujayanti\handlers\AssetsHandler.class
 in\edu\kristujayanti\handlers\GetAssetsStatusSummary.class
 in\edu\kristujayanti\constants\ContextRoutingURLName.class
 in\edu\kristujayanti\constants\ConstantKeys.class
+in\edu\kristujayanti\handlers\AssetGroupingHandler.class
 in\edu\kristujayanti\router\RouterBuilder.class

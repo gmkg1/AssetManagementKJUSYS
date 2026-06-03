@@ -176,6 +176,7 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
   goToDashboard(): void  { this.router.navigate(['/']); }
   goToViewAssets(): void { this.router.navigate(['/assets/view']); }
   goToIssueAsset(): void { this.router.navigate(['/assets/issue']); }
+  goToIssueLog(): void   { this.router.navigate(['/assets/issue-log']); }
   goToReports(): void    { this.router.navigate(['/assets/reports']); }
 
   openDetail(row: ReturnRecord): void {

@@ -181,7 +181,7 @@ export class AssetDashboardComponent implements OnInit, OnDestroy {
   }
 
   viewMoreIssues(): void {
-    this.router.navigate(['/assets/view']);
+    this.router.navigate(['/assets/issue-log']);
   }
 
   navigateTo(path: string): void {
@@ -191,4 +191,6 @@ export class AssetDashboardComponent implements OnInit, OnDestroy {
   navigateToDeptAssets(dept: string): void {
     this.router.navigate(['/assets/view'], { queryParams: { category: dept } });
   }
+
+  goToIssueLog(): void { this.router.navigate(['/assets/issue-log']); }
 }

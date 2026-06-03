@@ -2,6 +2,7 @@ C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\constants\ContextRoutingURLName.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\constants\MicroserviceRoutingURLNames.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\constants\UrlPathAndQueryParams.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\AssetGroupingHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\AssetsHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetAssetsStatusSummary.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetCategoryCountHandler.java

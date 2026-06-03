@@ -233,5 +233,6 @@ export class ReportsComponent implements OnInit, OnDestroy {
   goToDashboard():  void { this.router.navigate(['/']); }
   goToViewAssets(): void { this.router.navigate(['/assets/view']); }
   goToIssueAsset(): void { this.router.navigate(['/assets/issue']); }
+  goToIssueLog():   void { this.router.navigate(['/assets/issue-log']); }
   goToReturnLog():  void { this.router.navigate(['/assets/return-log']); }
 }
