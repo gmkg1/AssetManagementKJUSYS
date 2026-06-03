@@ -109,6 +109,16 @@ import java.util.stream.Stream;
             MicroserviceRoutingURLNames.STATUS,
             new GetStatusCountHandler(assetsService)
     );
+    addRoute(
+      HttpMethod.GET,
+      MicroserviceRoutingURLNames.LOCATIONSLIST,
+      new GetLocationsListHandler(assetsService)
+    );
+    addRoute(
+      HttpMethod.GET,
+      MicroserviceRoutingURLNames.STATUSESLIST,
+      new GetStatusesListHandler(assetsService)
+    );
 
   }
 

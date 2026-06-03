@@ -17,7 +17,44 @@ export class AssetService {
   }
 
   /** GET /assets?page=X&size=Y */
-  getAssets(page: number = 1, size: number = 10) {
+  getAssets(filters: {
+    page?: number;
+    pageSize?: number;
+    assetName?: string;
+    assetTagName?: string;
+    categoryId?: string;
+    locationId?: string;
+    statusId?: string;
+    purchaseDateFrom?: string;
+    purchaseDateTo?: string;
+  } = {}) {
+    let params = new HttpParams()
+      .set('page', (filters.page ?? 1).toString())
+      .set('pageSize', (filters.pageSize ?? 10).toString());
+    if (filters.assetName) params = params.set('assetName', filters.assetName);
+    if (filters.assetTagName) params = params.set('assetTagName', filters.assetTagName);
+    if (filters.categoryId) params = params.set('categoryId', filters.categoryId);
+    if (filters.locationId) params = params.set('locationId', filters.locationId);
+    if (filters.statusId) params = params.set('statusId', filters.statusId);
+    if (filters.purchaseDateFrom) params = params.set('purchaseDateFrom', filters.purchaseDateFrom);
+    if (filters.purchaseDateTo) params = params.set('purchaseDateTo', filters.purchaseDateTo);
+    return this.http.get<any>(`${this.baseUrl}/assets`, { params });
+  }
+
+  getCategories() {
+    return this.http.get<any>(`${this.baseUrl}/categories`);
+  }
+
+  getLocations() {
+    return this.http.get<any>(`${this.baseUrl}/locations-list`);
+  }
+
+  getStatuses() {
+    return this.http.get<any>(`${this.baseUrl}/statuses-list`);
+  }
+
+  /** legacy helper */
+  getAssetsLegacy(page: number = 1, size: number = 10) {
     const params = new HttpParams().set('page', page.toString()).set('size', size.toString());
     return this.http.get<any>(`${this.baseUrl}/assets`, { params });
   }

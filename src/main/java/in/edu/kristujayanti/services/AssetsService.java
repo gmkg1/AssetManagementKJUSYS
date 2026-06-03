@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Date;
 import java.util.ArrayList;
+import java.util.regex.Pattern;
 import in.edu.kristujayanti.util.PaginatedResult;
 
 
@@ -58,6 +59,13 @@ public class AssetsService {
 
 
       public PaginatedResult<JsonObject> getAssets(
+      String assetName,
+      String assetTagName,
+      String categoryId,
+      String locationId,
+      String statusId,
+      String purchaseDateFrom,
+      String purchaseDateTo,
       int page,
       int pageSize) {
 
@@ -200,6 +208,61 @@ public class AssetsService {
             .append("preserveNullAndEmptyArrays", true))
 
       );
+
+      List<Document> matchConditions = new ArrayList<>();
+
+      if (assetName != null && !assetName.isBlank()) {
+        matchConditions.add(new Document("assetName",
+          new Document("$regex", Pattern.quote(assetName.trim()))
+            .append("$options", "i")));
+      }
+
+      if (assetTagName != null && !assetTagName.isBlank()) {
+        matchConditions.add(new Document("assetTag.assetTagName",
+          new Document("$regex", Pattern.quote(assetTagName.trim()))
+            .append("$options", "i")));
+      }
+
+      if (categoryId != null && !categoryId.isBlank()) {
+        matchConditions.add(new Document("category._id", new ObjectId(categoryId)));
+      }
+
+      if (locationId != null && !locationId.isBlank()) {
+        matchConditions.add(new Document("location._id", new ObjectId(locationId)));
+      }
+
+      if (statusId != null && !statusId.isBlank()) {
+        matchConditions.add(new Document("status._id", new ObjectId(statusId)));
+      }
+
+      if ((purchaseDateFrom != null && !purchaseDateFrom.isBlank())
+        || (purchaseDateTo != null && !purchaseDateTo.isBlank())) {
+        Document purchaseDateMatch = new Document();
+        if (purchaseDateFrom != null && !purchaseDateFrom.isBlank()) {
+          purchaseDateMatch.append("$gte",
+            java.util.Date.from(
+              java.time.LocalDate.parse(purchaseDateFrom.trim())
+                .atStartOfDay(java.time.ZoneId.systemDefault())
+                .toInstant()));
+        }
+        if (purchaseDateTo != null && !purchaseDateTo.isBlank()) {
+          purchaseDateMatch.append("$lte",
+            java.util.Date.from(
+              java.time.LocalDate.parse(purchaseDateTo.trim())
+                .plusDays(1)
+                .atStartOfDay(java.time.ZoneId.systemDefault())
+                .minusNanos(1)
+                .toInstant()));
+        }
+        matchConditions.add(new Document("purchaseDate", purchaseDateMatch));
+      }
+
+      if (!matchConditions.isEmpty()) {
+        pipeline.add(new Document("$match",
+          matchConditions.size() == 1
+            ? matchConditions.get(0)
+            : new Document("$and", matchConditions)));
+      }
 
       // =========================
       // FACET
@@ -1022,6 +1085,28 @@ public class AssetsService {
       totalRecords,
       page,
       pageSize);
+  }
+
+  public JsonArray getDistinctLocations() {
+    JsonArray result = new JsonArray();
+    MongoCollection<Document> collection = mongoDatabase.getCollection("locations");
+    for (Document doc : collection.find()) {
+      result.add(new JsonObject()
+        .put("locationId", objectIdToString(doc.getObjectId("_id")))
+        .put("locationName", doc.getString("locationName")));
+    }
+    return result;
+  }
+
+  public JsonArray getDistinctStatuses() {
+    JsonArray result = new JsonArray();
+    MongoCollection<Document> collection = mongoDatabase.getCollection("status");
+    for (Document doc : collection.find()) {
+      result.add(new JsonObject()
+        .put("statusId", objectIdToString(doc.getObjectId("_id")))
+        .put("statusName", doc.getString("statusName")));
+    }
+    return result;
   }
 
 

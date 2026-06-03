@@ -19,6 +19,8 @@ public interface MicroserviceRoutingURLNames {
     String ISSUEDASSETS = "/issued-assets";
     String GRP = "/grp";
     String STATUS = "/status";
+    String LOCATIONSLIST = "/locations-list";
+    String STATUSESLIST = "/statuses-list";
 
 
 }

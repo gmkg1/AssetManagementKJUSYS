@@ -50,8 +50,23 @@ public class AssetsHandler implements Handler<RoutingContext> {
           : "10"
       );
 
+      String assetName = routingContext.request().getParam("assetName");
+      String assetTagName = routingContext.request().getParam("assetTagName");
+      String categoryId = routingContext.request().getParam("categoryId");
+      String locationId = routingContext.request().getParam("locationId");
+      String statusId = routingContext.request().getParam("statusId");
+      String purchaseDateFrom = routingContext.request().getParam("purchaseDateFrom");
+      String purchaseDateTo = routingContext.request().getParam("purchaseDateTo");
+
       PaginatedResult<JsonObject> result =
         assetsService.getAssets(
+          assetName,
+          assetTagName,
+          categoryId,
+          locationId,
+          statusId,
+          purchaseDateFrom,
+          purchaseDateTo,
           page,
           pageSize
         );
