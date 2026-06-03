@@ -167,6 +167,19 @@
           </div>
         </div>
 
+        <!-- Category tabs -->
+        <div class="flex items-center gap-1 px-4 pt-3 pb-0 border-b border-slate-100 overflow-x-auto">
+          <button *ngFor="let tab of categoryTabs"
+            class="flex-shrink-0 px-3 py-2 text-[11px] font-medium border-b-2 -mb-px transition-colors duration-150 whitespace-nowrap"
+            [class.border-blue-600]="activeCategory?.id === tab.id"
+            [class.text-blue-600]="activeCategory?.id === tab.id"
+            [class.border-transparent]="activeCategory?.id !== tab.id"
+            [class.text-slate-500]="activeCategory?.id !== tab.id"
+            (click)="selectCategory(tab)">
+            {{ tab.name }}
+          </button>
+        </div>
+
         <!-- Table card -->
         <div class="bg-white rounded-xl shadow-sm overflow-hidden">
           <!-- Toolbar -->
@@ -178,122 +191,7 @@
               <input class="flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400" type="text" placeholder="Search assets..." [(ngModel)]="searchQuery"/>
             </div>
 
-            <!-- CATEGORY dropdown multi-select -->
-            <div class="relative" (click)="$event.stopPropagation()">
-              <button
-                class="flex items-center gap-2 h-8 px-3 rounded-lg border text-[11px] font-medium transition-all duration-150 min-w-[110px]"
-                [class.border-blue-500]="categoryOpen || selectedCategories.length > 0"
-                [class.bg-blue-50]="categoryOpen || selectedCategories.length > 0"
-                [class.text-blue-700]="categoryOpen || selectedCategories.length > 0"
-                [class.border-slate-200]="!categoryOpen && selectedCategories.length === 0"
-                [class.bg-white]="!categoryOpen && selectedCategories.length === 0"
-                [class.text-slate-600]="!categoryOpen && selectedCategories.length === 0"
-                (click)="categoryOpen = !categoryOpen; statusOpen = false">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" class="w-3 h-3 flex-shrink-0">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6h16.5M7.5 12h9m-5.25 6h1.5"/>
-                </svg>
-                <span>Category</span>
-                <span *ngIf="selectedCategories.length > 0" class="ml-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center flex-shrink-0">{{ selectedCategories.length }}</span>
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" class="w-3 h-3 ml-auto transition-transform duration-150 flex-shrink-0" [class.rotate-180]="categoryOpen">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>
-                </svg>
-              </button>
-
-              <!-- Category dropdown -->
-              <div *ngIf="categoryOpen" class="absolute top-full left-0 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden py-1">
-                <div class="flex items-center justify-between px-3 py-1.5 border-b border-slate-100">
-                  <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Category</span>
-                  <button class="text-[10px] text-blue-600 hover:text-blue-800 font-medium transition-colors" (click)="selectedCategories = []">Clear</button>
-                </div>
-                <div *ngFor="let cat of categoriesMulti"
-                  class="flex items-center gap-2 px-3 py-2 hover:bg-blue-50 cursor-pointer transition-colors duration-100"
-                  (click)="toggleCategory(cat)">
-                  <div class="w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-all duration-100"
-                    [class.bg-blue-600]="selectedCategories.includes(cat)"
-                    [class.border-blue-600]="selectedCategories.includes(cat)"
-                    [class.border-slate-300]="!selectedCategories.includes(cat)">
-                    <svg *ngIf="selectedCategories.includes(cat)" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="3" class="w-2.5 h-2.5">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
-                    </svg>
-                  </div>
-                  <span class="text-xs text-slate-700"
-                    [class.font-medium]="selectedCategories.includes(cat)"
-                    [class.text-blue-700]="selectedCategories.includes(cat)">{{ cat }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- STATUS dropdown multi-select -->
-            <div class="relative" (click)="$event.stopPropagation()">
-              <button
-                class="flex items-center gap-2 h-8 px-3 rounded-lg border text-[11px] font-medium transition-all duration-150 min-w-[100px]"
-                [class.border-blue-500]="statusOpen || selectedStatuses.length > 0"
-                [class.bg-blue-50]="statusOpen || selectedStatuses.length > 0"
-                [class.text-blue-700]="statusOpen || selectedStatuses.length > 0"
-                [class.border-slate-200]="!statusOpen && selectedStatuses.length === 0"
-                [class.bg-white]="!statusOpen && selectedStatuses.length === 0"
-                [class.text-slate-600]="!statusOpen && selectedStatuses.length === 0"
-                (click)="statusOpen = !statusOpen; categoryOpen = false">
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" class="w-3 h-3 flex-shrink-0">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
-                </svg>
-                <span>Status</span>
-                <span *ngIf="selectedStatuses.length > 0" class="ml-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center flex-shrink-0">{{ selectedStatuses.length }}</span>
-                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" class="w-3 h-3 ml-auto transition-transform duration-150 flex-shrink-0" [class.rotate-180]="statusOpen">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>
-                </svg>
-              </button>
-
-              <!-- Status dropdown -->
-              <div *ngIf="statusOpen" class="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden py-1">
-                <div class="flex items-center justify-between px-3 py-1.5 border-b border-slate-100">
-                  <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Status</span>
-                  <button class="text-[10px] text-blue-600 hover:text-blue-800 font-medium transition-colors" (click)="selectedStatuses = []">Clear</button>
-                </div>
-                <div *ngFor="let st of statusesMulti"
-                  class="flex items-center gap-2 px-3 py-2 hover:bg-blue-50 cursor-pointer transition-colors duration-100"
-                  (click)="toggleStatus(st)">
-                  <div class="w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-all duration-100"
-                    [class.bg-blue-600]="selectedStatuses.includes(st)"
-                    [class.border-blue-600]="selectedStatuses.includes(st)"
-                    [class.border-slate-300]="!selectedStatuses.includes(st)">
-                    <svg *ngIf="selectedStatuses.includes(st)" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="3" class="w-2.5 h-2.5">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
-                    </svg>
-                  </div>
-                  <span class="text-xs flex items-center gap-1.5"
-                    [class.font-medium]="selectedStatuses.includes(st)"
-                    [class.text-blue-700]="selectedStatuses.includes(st)">
-                    <span class="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                      [class.bg-green-500]="st === 'Available'"
-                      [class.bg-blue-400]="st === 'Deployed'"
-                      [class.bg-yellow-400]="st === 'Under Maintenance'"
-                      [class.bg-slate-400]="st === 'Retired'"></span>
-                    {{ st }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Active filter chips -->
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span *ngFor="let cat of selectedCategories"
-                class="flex items-center gap-1 h-6 px-2 rounded-full bg-blue-100 text-blue-700 text-[10px] font-medium">
-                {{ cat }}
-                <button class="hover:text-blue-900 transition-colors" (click)="toggleCategory(cat)">
-                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" class="w-2.5 h-2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
-                </button>
-              </span>
-              <span *ngFor="let st of selectedStatuses"
-                class="flex items-center gap-1 h-6 px-2 rounded-full bg-blue-100 text-blue-700 text-[10px] font-medium">
-                {{ st }}
-                <button class="hover:text-blue-900 transition-colors" (click)="toggleStatus(st)">
-                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" class="w-2.5 h-2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
-                </button>
-              </span>
-            </div>
-
-            <span class="ml-auto text-[10px] text-slate-400">{{ filteredAssets.length }} result{{ filteredAssets.length !== 1 ? 's' : '' }}</span>
+            <span class="ml-auto text-[10px] text-slate-400">{{ totalRecords }} result{{ totalRecords !== 1 ? 's' : '' }}</span>
           </div>
 
           <!-- Table header -->
@@ -336,6 +234,29 @@
               </span>
             </div>
           </ng-container>
+
+          <!-- Pagination -->
+          <div *ngIf="totalPages > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+            <span class="text-[10px] text-slate-400">Page {{ currentPage }} of {{ totalPages }} &nbsp;·&nbsp; {{ totalRecords }} total</span>
+            <div class="flex items-center gap-1">
+              <button class="h-7 px-2 rounded-md text-[11px] border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                [disabled]="currentPage === 1" (click)="prevPage()">‹ Prev</button>
+              <ng-container *ngFor="let p of pageNumbers">
+                <button *ngIf="p !== -1"
+                  class="h-7 w-7 rounded-md text-[11px] border transition-colors"
+                  [class.bg-blue-600]="p === currentPage"
+                  [class.text-white]="p === currentPage"
+                  [class.border-blue-600]="p === currentPage"
+                  [class.border-slate-200]="p !== currentPage"
+                  [class.text-slate-600]="p !== currentPage"
+                  [class.hover:bg-slate-50]="p !== currentPage"
+                  (click)="goToPage(p)">{{ p }}</button>
+                <span *ngIf="p === -1" class="text-slate-400 text-[11px] px-1">…</span>
+              </ng-container>
+              <button class="h-7 px-2 rounded-md text-[11px] border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                [disabled]="currentPage === totalPages" (click)="nextPage()">Next ›</button>
+            </div>
+          </div>
         </div>
 
       </ng-container>

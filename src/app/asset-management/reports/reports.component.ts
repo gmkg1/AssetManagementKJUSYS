@@ -16,7 +16,7 @@ export interface ReportAsset {
   checked: boolean;
 }
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
 @Component({
   selector: 'app-reports',
@@ -27,6 +27,8 @@ export class ReportsComponent implements OnInit, OnDestroy {
 
   // ── state ────────────────────────────────────────────────────────────────────
   departments: string[] = [];
+  // Fixed full category list — always available regardless of current page
+  readonly allCategories = ['IT', 'Electrical', 'Sound', 'Stationery', 'Housekeeping', 'Furniture'];
   activeDept  = '';
   searchQuery = '';
   currentPage = 1;
@@ -46,17 +48,15 @@ export class ReportsComponent implements OnInit, OnDestroy {
     this.currentPage = 1;
   }
 
-  // ── data (grouped by category) ───────────────────────────────────────────────
+  // ── data — ALL loaded upfront, paginated client-side per dept ─────────────────
   private allAssets: Record<string, ReportAsset[]> = {};
+  private allPagesLoaded = false;
 
   // ── computed ─────────────────────────────────────────────────────────────────
   get assets(): ReportAsset[] {
     const list = this.allAssets[this.activeDept] ?? [];
     const q = this.searchQuery.toLowerCase().trim();
-    return list.filter(a => {
-      const matchesSearch = !q || a.name.toLowerCase().includes(q);
-      return matchesSearch;
-    });
+    return list.filter(a => !q || a.name.toLowerCase().includes(q));
   }
 
   get pagedAssets(): ReportAsset[] {
@@ -65,7 +65,14 @@ export class ReportsComponent implements OnInit, OnDestroy {
   }
 
   get totalPages(): number { return Math.max(1, Math.ceil(this.assets.length / PAGE_SIZE)); }
-  get pageNumbers(): number[] { return Array.from({ length: this.totalPages }, (_, i) => i + 1); }
+  get pageNumbers(): number[] {
+    const pages: number[] = [];
+    for (let i = 1; i <= this.totalPages; i++) {
+      if (i === 1 || i === this.totalPages || Math.abs(i - this.currentPage) <= 1) pages.push(i);
+      else if (pages[pages.length - 1] !== -1) pages.push(-1);
+    }
+    return pages;
+  }
   get selectedCount(): number { return this.pagedAssets.filter(a => a.checked).length; }
 
   // summary totals for active dept
@@ -79,51 +86,87 @@ export class ReportsComponent implements OnInit, OnDestroy {
   constructor(private router: Router, private assetService: AssetService) {}
 
   ngOnInit(): void {
-    this.loadReport();
+    this.loadAllReportData();
   }
 
   ngOnDestroy(): void {}
 
-  private loadReport(): void {
+  /** Load ALL pages from the server once, then paginate client-side per dept tab */
+  private loadAllReportData(): void {
     this.isLoading = true;
     this.apiError  = null;
+    this.allAssets = {};
+    this.allPagesLoaded = false;
 
-    this.assetService.getAssetStatusSummary().subscribe({
+    // First call to get totalPages
+    this.assetService.getAssetStatusSummary(1, PAGE_SIZE).subscribe({
       next: (response: any) => {
-        // Shape: { statusCode, type, responseData: { data: { assets: [] } } }
-        const raw: any[] = response?.responseData?.data?.assets ?? [];
+        const data       = response?.responseData?.data ?? {};
+        const firstBatch = data.assets ?? [];
+        const totalPages = data.totalPages ?? 1;
 
-        // Group rows by category
-        const grouped: Record<string, ReportAsset[]> = {};
-        raw.forEach((item, index) => {
-          const cat = item.category ?? 'Other';
-          if (!grouped[cat]) grouped[cat] = [];
-          grouped[cat].push({
-            id:           item.assetTagName ?? `TAG-${index + 1}`,
-            name:         item.assetTagName ?? '—',
-            category:     cat,
-            type:         'Asset',
-            total:        item.totalAssets    ?? 0,
-            readyToDeploy:item.ready          ?? 0,
-            deployed:     item.deployed       ?? 0,
-            deadStock:    item.deadStock       ?? 0,
-            underService: item.underMaintenance ?? 0,
-            damaged:      item.damaged         ?? 0,
-            checked:      false
+        this.mergeIntoAllAssets(firstBatch);
+
+        if (totalPages <= 1) {
+          this.finaliseData();
+          return;
+        }
+
+        // Fetch remaining pages in parallel
+        const remaining = Array.from({ length: totalPages - 1 }, (_, i) =>
+          this.assetService.getAssetStatusSummary(i + 2, PAGE_SIZE)
+        );
+
+        let completed = 0;
+        remaining.forEach(obs => {
+          obs.subscribe({
+            next: (r: any) => {
+              this.mergeIntoAllAssets(r?.responseData?.data?.assets ?? []);
+              completed++;
+              if (completed === remaining.length) this.finaliseData();
+            },
+            error: () => { completed++; if (completed === remaining.length) this.finaliseData(); }
           });
         });
-
-        this.allAssets   = grouped;
-        this.departments = Object.keys(grouped);
-        this.activeDept  = this.departments[0] ?? '';
-        this.isLoading   = false;
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error('Failed to load asset status summary:', err);
         this.apiError = 'Could not load report data from the server.';
         this.isLoading = false;
       }
     });
+  }
+
+  private mergeIntoAllAssets(raw: any[]): void {
+    raw.forEach((item, index) => {
+      const cat = item.category ?? 'Other';
+      if (!this.allAssets[cat]) this.allAssets[cat] = [];
+      this.allAssets[cat].push({
+        id:            item.assetTagName ?? `TAG-${index + 1}`,
+        name:          item.assetTagName ?? '—',
+        category:      cat,
+        type:          'Asset',
+        total:         item.totalAssets      ?? 0,
+        readyToDeploy: item.ready            ?? 0,
+        deployed:      item.deployed         ?? 0,
+        deadStock:     item.deadStock        ?? 0,
+        underService:  item.underMaintenance ?? 0,
+        damaged:       item.damaged          ?? 0,
+        checked:       false
+      });
+    });
+  }
+
+  private finaliseData(): void {
+    // Build dept tabs from actual data, merged with known categories
+    const fromData = Object.keys(this.allAssets);
+    // Show all known categories as tabs; empty ones will show 0 rows
+    this.departments = [...new Set([...this.allCategories, ...fromData])];
+    if (!this.activeDept || !this.departments.includes(this.activeDept)) {
+      this.activeDept = this.departments[0] ?? '';
+    }
+    this.allPagesLoaded = true;
+    this.isLoading = false;
   }
 
   @HostListener('document:click')
@@ -133,6 +176,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
     this.activeDept  = dept;
     this.currentPage = 1;
     this.allChecked  = false;
+    this.searchQuery = '';
   }
 
   toggleFilterPanel(event: Event): void { event.stopPropagation(); this.filterOpen = !this.filterOpen; }
@@ -161,9 +205,9 @@ export class ReportsComponent implements OnInit, OnDestroy {
     this.pagedAssets.forEach(a => a.checked = this.allChecked);
   }
 
-  goToPage(p: number): void { this.currentPage = p; }
-  prevPage(): void { if (this.currentPage > 1) this.currentPage--; }
-  nextPage(): void { if (this.currentPage < this.totalPages) this.currentPage++; }
+  goToPage(p: number): void { if (p !== this.currentPage) { this.currentPage = p; } }
+  prevPage(): void { if (this.currentPage > 1) { this.currentPage--; } }
+  nextPage(): void { if (this.currentPage < this.totalPages) { this.currentPage++; } }
 
   bulkExport(): void {
     const rows = this.pagedAssets.filter(a => a.checked);

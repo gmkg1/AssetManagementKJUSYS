@@ -191,12 +191,14 @@ public class AssetsService {
               "issueInfo.issuedToAssetId")
             .append("foreignField", "_id")
             .append("as", "issuedAsset"))
+
       );
 
       pipeline.add(
         new Document("$unwind",
           new Document("path", "$issuedAsset")
             .append("preserveNullAndEmptyArrays", true))
+
       );
 
       // =========================
@@ -811,6 +813,158 @@ public class AssetsService {
               doc.getInteger(
                 "damaged",
                 0))
+        );
+      }
+    }
+
+    return new PaginatedResult<>(
+      result,
+      totalRecords,
+      page,
+      pageSize);
+  }
+
+  public PaginatedResult<JsonObject> getAssetsByCategory(
+    String categoryId,
+    int page,
+    int pageSize) {
+
+    LOGGER.info(
+      "Fetching assets for category={} page={} pageSize={}",
+      categoryId,
+      page,
+      pageSize);
+
+    int skip = (page - 1) * pageSize;
+
+    MongoCollection<Document> collection =
+      mongoDatabase.getCollection("assets");
+
+    List<Document> pipeline = new ArrayList<>();
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "assettags")
+        .append("localField", "assetTagId")
+        .append("foreignField", "_id")
+        .append("as", "assetTag")));
+
+    pipeline.add(new Document("$unwind", "$assetTag"));
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "categories")
+        .append("localField", "assetTag.categoryId")
+        .append("foreignField", "_id")
+        .append("as", "category")));
+
+    pipeline.add(new Document("$unwind", "$category"));
+
+    pipeline.add(new Document("$match",
+      new Document("category._id",
+        new ObjectId(categoryId))));
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "status")
+        .append("localField", "statusId")
+        .append("foreignField", "_id")
+        .append("as", "status")));
+
+    pipeline.add(new Document("$unwind", "$status"));
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "locations")
+        .append("localField", "locationId")
+        .append("foreignField", "_id")
+        .append("as", "location")));
+
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$location")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$project",
+      new Document("assetName", 1)
+        .append("assetSerialNumber", 1)
+        .append("purchaseDate", 1)
+        .append("purchaseCost", 1)
+        .append("quantity", 1)
+        .append("isIssuable", 1)
+        .append("assetTagName",
+          "$assetTag.assetTagName")
+        .append("categoryName",
+          "$category.categoryName")
+        .append("statusName",
+          "$status.statusName")
+        .append("locationName",
+          "$location.locationName")));
+
+    pipeline.add(
+      new Document("$facet",
+        new Document("metadata",
+          List.of(
+            new Document("$count",
+              "totalRecords")
+          ))
+          .append("data",
+            List.of(
+              new Document("$skip", skip),
+              new Document("$limit", pageSize)
+            ))
+      )
+    );
+
+    Document facetResult =
+      collection.aggregate(pipeline)
+        .first();
+
+    List<JsonObject> result =
+      new ArrayList<>();
+
+    long totalRecords = 0;
+
+    if (facetResult != null) {
+
+      List<Document> metadata =
+        (List<Document>) facetResult.get("metadata");
+
+      if (!metadata.isEmpty()) {
+
+        totalRecords =
+          metadata.get(0)
+            .getInteger(
+              "totalRecords",
+              0);
+      }
+
+      List<Document> data =
+        (List<Document>) facetResult.get("data");
+
+      for (Document doc : data) {
+
+        result.add(
+          new JsonObject()
+            .put("_id",
+              objectIdToString(
+                doc.getObjectId("_id")))
+            .put("assetName",
+              doc.getString("assetName"))
+            .put("assetSerialNumber",
+              doc.getString("assetSerialNumber"))
+            .put("assetTagName",
+              doc.getString("assetTagName"))
+            .put("category",
+              doc.getString("categoryName"))
+            .put("status",
+              doc.getString("statusName"))
+            .put("location",
+              doc.getString("locationName"))
+            .put("purchaseDate",
+              dateToString(
+                doc.getDate("purchaseDate")))
+            .put("purchaseCost",
+              doc.getInteger("purchaseCost"))
+            .put("quantity",
+              doc.getInteger("quantity"))
+            .put("isIssuable",
+              doc.getBoolean("isIssuable"))
         );
       }
     }

@@ -17,6 +17,7 @@ public interface MicroserviceRoutingURLNames {
     String RETURN = "/return-logs";
     String ASSETSTATUSSUMMARY = "/asset-status-summary";
     String ISSUEDASSETS = "/issued-assets";
+    String GRP = "/grp";
 
 
 

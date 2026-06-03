@@ -13,8 +13,6 @@ export interface ReturnRecord {
   department:     string;
 }
 
-const PAGE_SIZE = 8;
-
 @Component({
   selector: 'app-return-log',
   templateUrl: './return-log.component.html',
@@ -26,6 +24,7 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
   sidebarOpen        = false;
   isLoading          = true;
   apiError: string | null = null;
+  searchQuery        = '';
 
   // ── Filter ───────────────────────────────────────────────────────────────────
   filterOpen = false;
@@ -35,14 +34,28 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
   // ── View ─────────────────────────────────────────────────────────────────────
   selectedRecord: ReturnRecord | null = null;
 
-  // ── Department tabs (built from API data) ────────────────────────────────────
+  // ── Department tabs ───────────────────────────────────────────────────────────
   departments: string[] = [];
   activeDept  = '';
 
-  searchQuery = '';
-  currentPage = 1;
+  // ── Server-side pagination ────────────────────────────────────────────────────
+  currentPage  = 1;
+  totalPagesVal = 1;   // backing value — avoid getter/property clash
+  totalRecords = 0;
+  pageSize     = 10;
 
-  // ── Form (detail panel) ───────────────────────────────────────────────────────
+  get totalPages(): number { return this.totalPagesVal; }
+
+  get visiblePages(): number[] {
+    const pages: number[] = [];
+    for (let i = 1; i <= this.totalPagesVal; i++) {
+      if (i === 1 || i === this.totalPagesVal || Math.abs(i - this.currentPage) <= 1) pages.push(i);
+      else if (pages[pages.length - 1] !== -1) pages.push(-1);
+    }
+    return pages;
+  }
+
+  // ── Form ─────────────────────────────────────────────────────────────────────
   formAssetName      = '';
   formAssetTag       = '';
   formClassification = '';
@@ -58,75 +71,58 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
   // ── Data ─────────────────────────────────────────────────────────────────────
   allRecords: ReturnRecord[] = [];
 
-  // ── Computed ─────────────────────────────────────────────────────────────────
-  get filteredRecords(): ReturnRecord[] {
+  get pagedRecords(): ReturnRecord[] {
     const q = this.searchQuery.toLowerCase();
     return this.allRecords.filter(r => {
-      const matchesDept  = !this.activeDept || r.department === this.activeDept;
-      const matchSearch  = !q || r.assetName.toLowerCase().includes(q)
-                              || r.assetTag.toLowerCase().includes(q)
-                              || r.returnTo.toLowerCase().includes(q);
-      const matchClass   = this.filterClassifications.length === 0
-                        || this.filterClassifications.includes(r.classification);
+      const matchesDept = !this.activeDept || r.department === this.activeDept;
+      const matchSearch = !q || r.assetName.toLowerCase().includes(q) || r.returnTo.toLowerCase().includes(q);
+      const matchClass  = this.filterClassifications.length === 0 || this.filterClassifications.includes(r.classification);
       return matchesDept && matchSearch && matchClass;
     });
   }
 
-  get totalPages(): number { return Math.max(1, Math.ceil(this.filteredRecords.length / PAGE_SIZE)); }
-
-  get pagedRecords(): ReturnRecord[] {
-    const start = (this.currentPage - 1) * PAGE_SIZE;
-    return this.filteredRecords.slice(start, start + PAGE_SIZE);
-  }
-
-  get visiblePages(): number[] {
-    const total = this.totalPages;
-    const cur   = this.currentPage;
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-    const pages: number[] = [1, 2, 3];
-    if (cur > 4) pages.push(-1);
-    if (cur > 3 && cur < total - 2) pages.push(cur);
-    pages.push(-1);
-    pages.push(total - 2, total - 1, total);
-    return [...new Set(pages)].filter((p, idx, arr) => {
-      if (p === -1) return arr[idx - 1] !== -1;
-      return true;
-    });
-  }
+  // keep filteredRecords alias for CSV export
+  get filteredRecords(): ReturnRecord[] { return this.pagedRecords; }
 
   constructor(private router: Router, private assetService: AssetService) {}
 
-  ngOnInit(): void  { this.loadReturnLogs(); }
+  ngOnInit(): void { this.loadReturnLogs(); }
   ngOnDestroy(): void {}
 
   private loadReturnLogs(): void {
     this.isLoading = true;
     this.apiError  = null;
 
-    this.assetService.getReturnLogs().subscribe({
+    this.assetService.getReturnLogs(this.currentPage, this.pageSize).subscribe({
       next: (response: any) => {
-        // Shape: { statusCode, type, responseData: { data: { assets: [] } } }
-        const raw: any[] = response?.responseData?.data?.assets ?? [];
+        const data = response?.responseData?.data ?? {};
+        // return-logs uses data.data instead of data.assets
+        const raw: any[] = data.data ?? data.assets ?? [];
+
+        this.totalRecords  = data.totalRecords ?? raw.length;
+        this.totalPagesVal = data.totalPages   ?? 1;
+        this.currentPage   = data.currentPage  ?? this.currentPage;
 
         this.allRecords = raw.map(item => ({
           assetName:      item.assetName  ?? '—',
-          assetTag:       item.assetName  ?? '—',   // no tag in response, use name as identifier
-          classification: 'Asset',                   // API doesn't return this field, default to Asset
+          assetTag:       item.assetName  ?? '—',
+          classification: 'Asset' as const,
           total:          item.total      ?? 0,
           returnType:     item.returnType ?? '—',
           returnTo:       item.issuedFor  ?? '—',
           returnDate:     item.returnDate
-                            ? new Date(item.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                            : '—',
-          department:     item.category  ?? 'Other'
+            ? new Date(item.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '—',
+          department: item.category ?? 'Other'
         }));
 
-        // Build dept tabs dynamically from categories in data
         this.departments = [...new Set(this.allRecords.map(r => r.department))];
-        this.activeDept  = this.departments[0] ?? '';
-        this.isLoading   = false;
+        if (!this.activeDept || !this.departments.includes(this.activeDept)) {
+          this.activeDept = this.departments[0] ?? '';
+        }
+        this.isLoading = false;
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error('Failed to load return logs:', err);
         this.apiError = 'Could not load return log data from the server.';
         this.isLoading = false;
@@ -137,19 +133,16 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
   @HostListener('document:click')
   onDocumentClick(): void { this.sidebarOpen = false; this.filterOpen = false; }
 
-  // ── Filter ───────────────────────────────────────────────────────────────────
   toggleFilterPanel(event: Event): void { event.stopPropagation(); this.filterOpen = !this.filterOpen; }
 
   toggleClassFilter(c: string): void {
     const i = this.filterClassifications.indexOf(c);
-    if (i === -1) this.filterClassifications.push(c);
-    else this.filterClassifications.splice(i, 1);
+    if (i === -1) this.filterClassifications.push(c); else this.filterClassifications.splice(i, 1);
     this.currentPage = 1;
   }
 
   clearFilters(): void { this.filterClassifications = []; this.currentPage = 1; }
 
-  // ── Export ───────────────────────────────────────────────────────────────────
   exportCSV(): void {
     const headers = ['Name', 'Category', 'Total', 'Return Type', 'Returned To', 'Return Date'];
     const csv = [
@@ -169,7 +162,6 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
     URL.revokeObjectURL(url);
   }
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
   setDept(dept: string): void {
     this.activeDept     = dept;
     this.searchQuery    = '';
@@ -177,16 +169,15 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
     this.selectedRecord = null;
   }
 
-  prevPage(): void { if (this.currentPage > 1) this.currentPage--; }
-  nextPage(): void { if (this.currentPage < this.totalPages) this.currentPage++; }
-  goToPage(p: number): void { this.currentPage = p; }
+  prevPage(): void { if (this.currentPage > 1) { this.currentPage--; this.loadReturnLogs(); } }
+  nextPage(): void { if (this.currentPage < this.totalPagesVal) { this.currentPage++; this.loadReturnLogs(); } }
+  goToPage(p: number): void { if (p !== this.currentPage) { this.currentPage = p; this.loadReturnLogs(); } }
 
   goToDashboard(): void  { this.router.navigate(['/']); }
   goToViewAssets(): void { this.router.navigate(['/assets/view']); }
   goToIssueAsset(): void { this.router.navigate(['/assets/issue']); }
   goToReports(): void    { this.router.navigate(['/assets/reports']); }
 
-  // ── Row click ─────────────────────────────────────────────────────────────────
   openDetail(row: ReturnRecord): void {
     this.selectedRecord     = row;
     this.formAssetName      = row.assetName;

@@ -11,7 +11,6 @@ export interface Asset {
   assignedTo: string;
   purchaseDate: string;
   condition: string;
-  // detail fields
   assetTag: string;
   serial: string;
   checkoutDate: string;
@@ -21,10 +20,16 @@ export interface Asset {
   purchaseCost: string;
   location: string;
   block: string;
+  quantity: number;
   issuedTo?: {
     name: string; studentId: string; department: string;
     email: string; phone: string; checkoutDate: string; returnDate: string;
   };
+}
+
+export interface CategoryTab {
+  id: string;
+  name: string;
 }
 
 @Component({
@@ -34,29 +39,45 @@ export interface Asset {
 })
 export class ViewAssetsComponent implements OnInit, OnDestroy {
 
-  // ── view state ──────────────────────────────────────────────────────────────
+  // ── view state ────────────────────────────────────────────────────────────
   view: 'list' | 'detail' = 'list';
   selectedAsset: Asset | null = null;
   detailTab: 'info'|'licenses'|'components'|'assets'|'history'|'maintenances'|'files' = 'info';
 
-  // ── loading / error ─────────────────────────────────────────────────────────
+  // ── loading / error ───────────────────────────────────────────────────────
   isLoading = true;
   apiError: string | null = null;
 
-  // ── list state ──────────────────────────────────────────────────────────────
+  // ── category tabs — hardcoded with real MongoDB IDs ──────────────────────
+  categoryTabs: CategoryTab[] = [
+    { id: '6a0ffe51d70e831c1c44154e', name: 'IT' },
+    { id: '6a0ffe51d70e831c1c44154f', name: 'Electrical' },
+    { id: '6a0ffe51d70e831c1c441550', name: 'Sound' },
+    { id: '6a0ffe51d70e831c1c441551', name: 'Stationery' },
+    { id: '6a0ffe51d70e831c1c441552', name: 'Housekeeping' },
+    { id: '6a0ffe51d70e831c1c441553', name: 'Furniture' },
+  ];
+  activeCategory: CategoryTab | null = null;
+
+  // ── search ────────────────────────────────────────────────────────────────
   searchQuery = '';
-  selectedCategory = 'All';
-  selectedStatus = 'All';
 
-  // populated dynamically from API data
-  categoriesMulti: string[] = [];
-  statusesMulti   = ['Ready to Deploy', 'Deployed', 'Under Maintenance', 'Damaged','Dead Stock'];
-  selectedCategories: string[] = [];
-  selectedStatuses:   string[] = [];
-  categoryOpen = false;
-  statusOpen   = false;
+  // ── server-side pagination ────────────────────────────────────────────────
+  currentPage  = 1;
+  totalPages   = 1;
+  totalRecords = 0;
+  pageSize     = 3;
 
-  // ── detail tabs ─────────────────────────────────────────────────────────────
+  get pageNumbers(): number[] {
+    const pages: number[] = [];
+    for (let i = 1; i <= this.totalPages; i++) {
+      if (i === 1 || i === this.totalPages || Math.abs(i - this.currentPage) <= 1) pages.push(i);
+      else if (pages[pages.length - 1] !== -1) pages.push(-1);
+    }
+    return pages;
+  }
+
+  // ── detail tabs ───────────────────────────────────────────────────────────
   tabs = [
     { key: 'info',         label: 'Info',         icon: 'M11.25 11.25l.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z' },
     { key: 'licenses',     label: 'Licenses',     icon: 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z' },
@@ -75,40 +96,25 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
     { label: 'Return and Delete', color: '#FB8C00', icon: 'M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3' },
   ];
 
-  // ── data ────────────────────────────────────────────────────────────────────
+  // ── data ──────────────────────────────────────────────────────────────────
   assets: Asset[] = [];
 
+  // client-side search filter on current page only
   get filteredAssets(): Asset[] {
-    return this.assets.filter(a => {
-      const q = this.searchQuery.toLowerCase();
-      const matchesSearch = !q
-        || a.name.toLowerCase().includes(q)
-        || a.id.toLowerCase().includes(q)
-        || a.assignedTo.toLowerCase().includes(q)
-        || a.category.toLowerCase().includes(q)
-        || a.location?.toLowerCase().includes(q);
-      const matchesCategory = this.selectedCategories.length === 0 || this.selectedCategories.includes(a.category);
-      const matchesStatus   = this.selectedStatuses.length === 0   || this.selectedStatuses.includes(a.status);
-      return matchesSearch && matchesCategory && matchesStatus;
-    });
+    if (!this.searchQuery.trim()) return this.assets;
+    const q = this.searchQuery.toLowerCase();
+    return this.assets.filter(a =>
+      a.name.toLowerCase().includes(q)
+      || a.serial.toLowerCase().includes(q)
+      || a.status.toLowerCase().includes(q)
+      || a.location.toLowerCase().includes(q)
+    );
   }
 
-  toggleCategory(cat: string): void {
-    const i = this.selectedCategories.indexOf(cat);
-    if (i === -1) this.selectedCategories.push(cat); else this.selectedCategories.splice(i, 1);
-  }
-
-  toggleStatus(st: string): void {
-    const i = this.selectedStatuses.indexOf(st);
-    if (i === -1) this.selectedStatuses.push(st); else this.selectedStatuses.splice(i, 1);
-  }
-
-  get totalCount():       number { return this.assets.length; }
+  get totalCount():       number { return this.totalRecords; }
   get availableCount():   number { return this.assets.filter(a => a.status === 'Ready to Deploy').length; }
   get deployedCount():    number { return this.assets.filter(a => a.status === 'Deployed').length; }
   get maintenanceCount(): number { return this.assets.filter(a => a.status === 'Under Maintenance').length; }
-  get damagedCount(): number { return this.assets.filter(a => a.status === 'Damaged').length; }
-  get deadStockCount(): number { return this.assets.filter(a => a.status === 'Dead Stock').length; }
 
   assetsDropdownOpen = false;
   sidebarOpen = false;
@@ -120,39 +126,47 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.loadAssets();
-
-    // Support pre-filtering by category from dashboard department card click
-    this.route.queryParams.subscribe(params => {
-      if (params['category']) {
-        const cat = params['category'];
-        if (!this.selectedCategories.includes(cat)) {
-          this.selectedCategories = [cat];
-        }
+    // Check if a category was pre-selected from dashboard
+    this.route.queryParams.subscribe((params: Record<string, string>) => {
+      const preselect = params['category'];
+      if (preselect) {
+        const match = this.categoryTabs.find(t => t.name === preselect);
+        this.selectCategory(match ?? this.categoryTabs[0]);
+      } else {
+        this.selectCategory(this.categoryTabs[0]);
       }
     });
   }
 
   ngOnDestroy(): void {}
 
+  private loadCategories(): void {} // no longer needed
+
+  selectCategory(tab: CategoryTab): void {
+    this.activeCategory = tab;
+    this.currentPage    = 1;
+    this.searchQuery    = '';
+    this.loadAssets();
+  }
+
   private loadAssets(): void {
+    if (!this.activeCategory) return;
     this.isLoading = true;
-    this.apiError = null;
+    this.apiError  = null;
 
-    this.assetService.getAssets().subscribe({
+    this.assetService.getAssetsByCategory(this.activeCategory.id, this.currentPage, this.pageSize).subscribe({
       next: (response: any) => {
-        // Shape: { statusCode, type, responseData: { data: { assets: [] } } }
-        const raw: any[] = response?.responseData?.data?.assets ?? [];
+        const data = response?.responseData?.data ?? {};
+        const raw: any[] = data.assets ?? [];
 
-        this.assets = raw.map((item, index) => this.mapToAsset(item, index));
+        this.totalRecords = data.totalRecords ?? raw.length;
+        this.totalPages   = data.totalPages   ?? 1;
+        this.currentPage  = data.currentPage  ?? this.currentPage;
 
-        // Build category filter list dynamically from real data
-        const cats = [...new Set(this.assets.map(a => a.category).filter(Boolean))];
-        this.categoriesMulti = cats;
-
+        this.assets = raw.map((item, i) => this.mapToAsset(item, i));
         this.isLoading = false;
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error('Failed to load assets:', err);
         this.apiError = 'Could not load assets from the server.';
         this.isLoading = false;
@@ -160,48 +174,37 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Map raw API asset object to the Asset interface */
-  private mapToAsset(item: any, index: number): Asset {
-    const issuedTo = item.issuedTo && item.issuedTo !== 'Not Issued'
-      ? {
-          name: item.issuedTo,
-          studentId: '—',
-          department: '—',
-          email: '—',
-          phone: '—',
-          checkoutDate: '—',
-          returnDate: '—'
-        }
-      : undefined;
+  prevPage(): void { if (this.currentPage > 1) { this.currentPage--; this.loadAssets(); } }
+  nextPage(): void { if (this.currentPage < this.totalPages) { this.currentPage++; this.loadAssets(); } }
+  goToPage(p: number): void { if (p !== this.currentPage) { this.currentPage = p; this.loadAssets(); } }
 
+  private mapToAsset(item: any, index: number): Asset {
     return {
       id:           item.assetSerialNumber ?? `AST-${String(index + 1).padStart(3, '0')}`,
-      name:         item.assetName ?? '—',
-      department:   item.block ?? item.location ?? '—',
-      category:     item.category ?? '—',
-      status:       item.status ?? 'Ready to Deploy',
-      assignedTo:   item.issuedTo && item.issuedTo !== 'Not Issued' ? item.issuedTo : '—',
-      purchaseDate: '—',
+      name:         item.assetName         ?? '—',
+      department:   item.location          ?? '—',
+      category:     item.category          ?? '—',
+      status:       item.status            ?? '—',
+      assignedTo:   '—',
+      purchaseDate: item.purchaseDate
+        ? new Date(item.purchaseDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '—',
       condition:    'Good',
-      assetTag:     item.model ?? '—',
+      assetTag:     item.assetTagName      ?? '—',
       serial:       item.assetSerialNumber ?? '—',
       checkoutDate: '—',
-      model:        item.model ?? '—',
+      model:        item.assetTagName      ?? '—',
       modelNo:      '—',
-      returnable:   item.issuable ? 'Yes' : 'No',
-      purchaseCost: '—',
-      location:     item.location ?? '—',
-      block:        item.block ?? '—',
-      issuedTo
+      returnable:   item.isIssuable ? 'Yes' : 'No',
+      purchaseCost: item.purchaseCost != null ? `Rs. ${item.purchaseCost.toLocaleString()}` : '—',
+      location:     item.location          ?? '—',
+      block:        '—',
+      quantity:     item.quantity          ?? 0,
     };
   }
 
   @HostListener('document:click')
-  onDocumentClick(): void {
-    this.categoryOpen = false;
-    this.statusOpen   = false;
-    this.sidebarOpen  = false;
-  }
+  onDocumentClick(): void { this.sidebarOpen = false; }
 
   openDetail(asset: Asset): void {
     this.selectedAsset = asset;
@@ -233,11 +236,11 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
 
   getStatusClass(status: string): string {
     const map: Record<string, string> = {
-      'Ready to Deploy': 'status-Ready to Deploy',
-      'Deployed': 'status-deployed',
+      'Ready to Deploy': 'status-available',
+      'Deployed':        'status-deployed',
       'Under Maintenance': 'status-maintenance',
-      'Damaged': 'status-Damaged',
-      'Dead Stock': 'status-Dead Stock'
+      'Damaged':         'status-retired',
+      'Dead Stock':      'status-retired',
     };
     return map[status] ?? 'status-available';
   }
