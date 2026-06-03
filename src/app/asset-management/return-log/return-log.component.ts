@@ -1,18 +1,17 @@
-﻿import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
+import { AssetService } from '../../services/asset.service';
 
 export interface ReturnRecord {
-  assetName: string;
-  assetTag: string;
-  classification: 'Asset' | 'Component' | 'Consumable' | 'Accessory';
-  total: number;
-  returnType: string;
-  returnTo: string;
-  returnDate: string;
-  department: string;
+  assetName:      string;
+  assetTag:       string;
+  classification: string;
+  total:          number;
+  returnType:     string;
+  returnTo:       string;
+  returnDate:     string;
+  department:     string;
 }
-
-const PAGE_SIZE = 8;
 
 @Component({
   selector: 'app-return-log',
@@ -22,24 +21,41 @@ const PAGE_SIZE = 8;
 export class ReturnLogComponent implements OnInit, OnDestroy {
 
   assetsDropdownOpen = false;
-  sidebarOpen = false;
+  sidebarOpen        = false;
+  isLoading          = true;
+  apiError: string | null = null;
+  searchQuery        = '';
 
-  // ── Filter state ─────────────────────────────────────────────────────────────
+  // ── Filter ───────────────────────────────────────────────────────────────────
   filterOpen = false;
   filterClassifications: string[] = [];
   readonly classificationFilterOptions = ['Asset', 'Component', 'Consumable', 'Accessory'];
 
-  // ── View state ──────────────────────────────────────────────────────────────
+  // ── View ─────────────────────────────────────────────────────────────────────
   selectedRecord: ReturnRecord | null = null;
 
-  // ── Department tabs ─────────────────────────────────────────────────────────
-  departments = ['I.T', 'Electrical', 'Sound', 'Stationery', 'Housekeeping', 'Furnitures'];
-  activeDept = 'I.T';
+  // ── Department tabs ───────────────────────────────────────────────────────────
+  departments: string[] = [];
+  activeDept  = '';
 
-  searchQuery = '';
-  currentPage = 1;
+  // ── Server-side pagination ────────────────────────────────────────────────────
+  currentPage  = 1;
+  totalPagesVal = 1;   // backing value — avoid getter/property clash
+  totalRecords = 0;
+  pageSize     = 10;
 
-  // ── Form fields (detail view) ───────────────────────────────────────────────
+  get totalPages(): number { return this.totalPagesVal; }
+
+  get visiblePages(): number[] {
+    const pages: number[] = [];
+    for (let i = 1; i <= this.totalPagesVal; i++) {
+      if (i === 1 || i === this.totalPagesVal || Math.abs(i - this.currentPage) <= 1) pages.push(i);
+      else if (pages[pages.length - 1] !== -1) pages.push(-1);
+    }
+    return pages;
+  }
+
+  // ── Form ─────────────────────────────────────────────────────────────────────
   formAssetName      = '';
   formAssetTag       = '';
   formClassification = '';
@@ -52,99 +68,88 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
   returnTypeOptions     = ['Permanent Return', 'Temporary Return', 'Damaged Return', 'Lost Report'];
   returnToOptions       = ['IT Department', 'Admin Office', 'Library', 'Lab Store', 'Principal Office'];
 
-  // ── Data ────────────────────────────────────────────────────────────────────
-  allRecords: ReturnRecord[] = [
-    { assetName: 'Laptops',           assetTag: '1210073015', classification: 'Asset',      total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Desktops',          assetTag: '1210073015', classification: 'Asset',      total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'VOIP Phones',       assetTag: '1210073015', classification: 'Component',  total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Displays',          assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Tablets',           assetTag: '1210073015', classification: 'Accessory',  total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'CCTV',              assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Keyboards',         assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Mouse',             assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Servers',           assetTag: '1210073015', classification: 'Asset',      total: 12,  returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Routers',           assetTag: '1210073015', classification: 'Asset',      total: 45,  returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Projectors',        assetTag: '1210073016', classification: 'Asset',      total: 40,  returnType: '', returnTo: '', returnDate: '', department: 'Electrical' },
-    { assetName: 'UPS Units',         assetTag: '1210073017', classification: 'Asset',      total: 25,  returnType: '', returnTo: '', returnDate: '', department: 'Electrical' },
-    { assetName: 'Air Conditioners',  assetTag: '1210073018', classification: 'Asset',      total: 60,  returnType: '', returnTo: '', returnDate: '', department: 'Electrical' },
-    { assetName: 'Fans',              assetTag: '1210073019', classification: 'Consumable', total: 200, returnType: '', returnTo: '', returnDate: '', department: 'Electrical' },
-    { assetName: 'Extension Boards',  assetTag: '1210073020', classification: 'Accessory',  total: 150, returnType: '', returnTo: '', returnDate: '', department: 'Electrical' },
-    { assetName: 'PA Speakers',       assetTag: '1210073021', classification: 'Asset',      total: 18,  returnType: '', returnTo: '', returnDate: '', department: 'Sound' },
-    { assetName: 'Wireless Mics',     assetTag: '1210073022', classification: 'Asset',      total: 30,  returnType: '', returnTo: '', returnDate: '', department: 'Sound' },
-    { assetName: 'Amplifiers',        assetTag: '1210073023', classification: 'Component',  total: 12,  returnType: '', returnTo: '', returnDate: '', department: 'Sound' },
-    { assetName: 'Mixers',            assetTag: '1210073024', classification: 'Asset',      total: 8,   returnType: '', returnTo: '', returnDate: '', department: 'Sound' },
-    { assetName: 'Whiteboard Markers',assetTag: '1210073025', classification: 'Consumable', total: 500, returnType: '', returnTo: '', returnDate: '', department: 'Stationery' },
-    { assetName: 'Laser Pointers',    assetTag: '1210073026', classification: 'Accessory',  total: 20,  returnType: '', returnTo: '', returnDate: '', department: 'Stationery' },
-    { assetName: 'Staplers',          assetTag: '1210073027', classification: 'Consumable', total: 80,  returnType: '', returnTo: '', returnDate: '', department: 'Stationery' },
-    { assetName: 'Mop & Bucket Sets', assetTag: '1210073028', classification: 'Consumable', total: 60,  returnType: '', returnTo: '', returnDate: '', department: 'Housekeeping' },
-    { assetName: 'Vacuum Cleaners',   assetTag: '1210073029', classification: 'Asset',      total: 15,  returnType: '', returnTo: '', returnDate: '', department: 'Housekeeping' },
-    { assetName: 'Cleaning Trolleys', assetTag: '1210073030', classification: 'Asset',      total: 20,  returnType: '', returnTo: '', returnDate: '', department: 'Housekeeping' },
-    { assetName: 'Office Chairs',     assetTag: '1210073031', classification: 'Asset',      total: 400, returnType: '', returnTo: '', returnDate: '', department: 'Furnitures' },
-    { assetName: 'Standing Desks',    assetTag: '1210073032', classification: 'Asset',      total: 50,  returnType: '', returnTo: '', returnDate: '', department: 'Furnitures' },
-    { assetName: 'Conference Tables', assetTag: '1210073033', classification: 'Asset',      total: 12,  returnType: '', returnTo: '', returnDate: '', department: 'Furnitures' },
-    { assetName: 'Bookshelves',       assetTag: '1210073034', classification: 'Asset',      total: 80,  returnType: '', returnTo: '', returnDate: '', department: 'Furnitures' },
-  ];
-
-  // ── Computed ─────────────────────────────────────────────────────────────────
-  get filteredRecords(): ReturnRecord[] {
-    const q = this.searchQuery.toLowerCase();
-    return this.allRecords.filter(r => {
-      const matchesDept   = r.department === this.activeDept;
-      const matchesSearch = !q || r.assetName.toLowerCase().includes(q) || r.assetTag.toLowerCase().includes(q) || r.classification.toLowerCase().includes(q);
-      const matchesClass  = this.filterClassifications.length === 0 || this.filterClassifications.includes(r.classification);
-      return matchesDept && matchesSearch && matchesClass;
-    });
-  }
-
-  get totalPages(): number { return Math.max(1, Math.ceil(this.filteredRecords.length / PAGE_SIZE)); }
+  // ── Data ─────────────────────────────────────────────────────────────────────
+  allRecords: ReturnRecord[] = [];
 
   get pagedRecords(): ReturnRecord[] {
-    const start = (this.currentPage - 1) * PAGE_SIZE;
-    return this.filteredRecords.slice(start, start + PAGE_SIZE);
-  }
-
-  get visiblePages(): number[] {
-    const total = this.totalPages;
-    const cur   = this.currentPage;
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-    const pages: number[] = [1, 2, 3];
-    if (cur > 4) pages.push(-1);
-    if (cur > 3 && cur < total - 2) pages.push(cur);
-    pages.push(-1);
-    pages.push(total - 2, total - 1, total);
-    return [...new Set(pages)].filter((p, idx, arr) => {
-      if (p === -1) return arr[idx - 1] !== -1;
-      return true;
+    const q = this.searchQuery.toLowerCase();
+    return this.allRecords.filter(r => {
+      const matchesDept = !this.activeDept || r.department === this.activeDept;
+      const matchSearch = !q || r.assetName.toLowerCase().includes(q) || r.returnTo.toLowerCase().includes(q);
+      const matchClass  = this.filterClassifications.length === 0 || this.filterClassifications.includes(r.classification);
+      return matchesDept && matchSearch && matchClass;
     });
   }
 
-  constructor(private router: Router) {}
+  // keep filteredRecords alias for CSV export
+  get filteredRecords(): ReturnRecord[] { return this.pagedRecords; }
 
-  ngOnInit(): void  {}
+  constructor(private router: Router, private assetService: AssetService) {}
+
+  ngOnInit(): void { this.loadReturnLogs(); }
   ngOnDestroy(): void {}
+
+  private loadReturnLogs(): void {
+    this.isLoading = true;
+    this.apiError  = null;
+
+    this.assetService.getReturnLogs(this.currentPage, this.pageSize).subscribe({
+      next: (response: any) => {
+        const data = response?.responseData?.data ?? {};
+        // return-logs uses data.data instead of data.assets
+        const raw: any[] = data.data ?? data.assets ?? [];
+
+        this.totalRecords  = data.totalRecords ?? raw.length;
+        this.totalPagesVal = data.totalPages   ?? 1;
+        this.currentPage   = data.currentPage  ?? this.currentPage;
+
+        this.allRecords = raw.map(item => ({
+          assetName:      item.assetName  ?? '—',
+          assetTag:       item.assetName  ?? '—',
+          classification: 'Asset' as const,
+          total:          item.total      ?? 0,
+          returnType:     item.returnType ?? '—',
+          returnTo:       item.issuedFor  ?? '—',
+          returnDate:     item.returnDate
+            ? new Date(item.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '—',
+          department: item.category ?? 'Other'
+        }));
+
+        this.departments = [...new Set(this.allRecords.map(r => r.department))];
+        if (!this.activeDept || !this.departments.includes(this.activeDept)) {
+          this.activeDept = this.departments[0] ?? '';
+        }
+        this.isLoading = false;
+      },
+      error: (err: any) => {
+        console.error('Failed to load return logs:', err);
+        this.apiError = 'Could not load return log data from the server.';
+        this.isLoading = false;
+      }
+    });
+  }
 
   @HostListener('document:click')
   onDocumentClick(): void { this.sidebarOpen = false; this.filterOpen = false; }
 
-  // ── Filter ───────────────────────────────────────────────────────────────────
   toggleFilterPanel(event: Event): void { event.stopPropagation(); this.filterOpen = !this.filterOpen; }
 
   toggleClassFilter(c: string): void {
     const i = this.filterClassifications.indexOf(c);
-    if (i === -1) this.filterClassifications.push(c);
-    else this.filterClassifications.splice(i, 1);
+    if (i === -1) this.filterClassifications.push(c); else this.filterClassifications.splice(i, 1);
     this.currentPage = 1;
   }
 
   clearFilters(): void { this.filterClassifications = []; this.currentPage = 1; }
 
-  // ── Export ───────────────────────────────────────────────────────────────────
   exportCSV(): void {
-    const rows = this.filteredRecords;
-    const headers = ['Name', 'Asset Tag', 'Classification', 'Total', 'Return Type', 'Return To', 'Return Date', 'Department'];
+    const headers = ['Name', 'Category', 'Total', 'Return Type', 'Returned To', 'Return Date'];
     const csv = [
       headers.join(','),
-      ...rows.map(r => [r.assetName, r.assetTag, r.classification, r.total, r.returnType || '—', r.returnTo || '—', r.returnDate || '—', r.department].join(','))
+      ...this.filteredRecords.map(r =>
+        [r.assetName, r.department, r.total, r.returnType, r.returnTo, r.returnDate].join(',')
+      )
     ].join('\n');
     this.downloadCSV(csv, `return-log-${this.activeDept}.csv`);
   }
@@ -157,25 +162,23 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
     URL.revokeObjectURL(url);
   }
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
   setDept(dept: string): void {
-    this.activeDept  = dept;
-    this.searchQuery = '';
-    this.currentPage = 1;
+    this.activeDept     = dept;
+    this.searchQuery    = '';
+    this.currentPage    = 1;
     this.selectedRecord = null;
   }
 
-  prevPage(): void { if (this.currentPage > 1) this.currentPage--; }
-  nextPage(): void { if (this.currentPage < this.totalPages) this.currentPage++; }
-  goToPage(p: number): void { this.currentPage = p; }
+  prevPage(): void { if (this.currentPage > 1) { this.currentPage--; this.loadReturnLogs(); } }
+  nextPage(): void { if (this.currentPage < this.totalPagesVal) { this.currentPage++; this.loadReturnLogs(); } }
+  goToPage(p: number): void { if (p !== this.currentPage) { this.currentPage = p; this.loadReturnLogs(); } }
 
   goToDashboard(): void  { this.router.navigate(['/']); }
   goToViewAssets(): void { this.router.navigate(['/assets/view']); }
   goToIssueAsset(): void { this.router.navigate(['/assets/issue']); }
+  goToIssueLog(): void   { this.router.navigate(['/assets/issue-log']); }
   goToReports(): void    { this.router.navigate(['/assets/reports']); }
-  goToIssueLog(): void  { this.router.navigate(['/assets/issue-log']); }
 
-  // ── Row click ─────────────────────────────────────────────────────────────────
   openDetail(row: ReturnRecord): void {
     this.selectedRecord     = row;
     this.formAssetName      = row.assetName;
@@ -198,7 +201,10 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
   }
 
   getClassClass(c: string): string {
-    const map: any = { 'Asset': 'class-asset', 'Component': 'class-component', 'Consumable': 'class-consumable', 'Accessory': 'class-accessory' };
-    return map[c] || '';
+    const map: Record<string, string> = {
+      'Asset': 'class-asset', 'Component': 'class-component',
+      'Consumable': 'class-consumable', 'Accessory': 'class-accessory'
+    };
+    return map[c] ?? 'class-asset';
   }
 }
