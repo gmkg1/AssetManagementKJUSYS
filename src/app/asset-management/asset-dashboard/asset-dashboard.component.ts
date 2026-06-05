@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { AssetService } from '../../services/asset.service';
 
 interface AssetDepartment {
+  id: string;
   name: string;
   cssKey: string;
   count: number;
@@ -124,6 +125,7 @@ export class AssetDashboardComponent implements OnInit, OnDestroy {
         this.departments = categories.map(cat => {
           const icon = CATEGORY_ICON_MAP[cat.categoryName] ?? DEFAULT_ICON;
           return {
+            id: cat.categoryId,
             name: cat.categoryName,
             cssKey: cat.categoryName.toLowerCase().replace(/\s+/g, '-'),
             count: cat.assetCount ?? 0,
@@ -142,10 +144,10 @@ export class AssetDashboardComponent implements OnInit, OnDestroy {
     });
 
     // Issue history table
-    this.assetService.getIssuedAssets().subscribe({
+    this.assetService.getIssuedAssets({ page: 1, pageSize: 3 }).subscribe({
       next: (response: any) => {
         const issued: any[] = response?.responseData?.data?.assets ?? [];
-        this.issueHistory = issued.slice(0, 10).map(item => ({
+        this.issueHistory = issued.slice(0, 3).map(item => ({
           receiverName: item.receiverName ?? 'Unknown',
           department:   item.receiverType ?? '—',
           issueDate:    item.issueDate
@@ -192,8 +194,8 @@ export class AssetDashboardComponent implements OnInit, OnDestroy {
     this.router.navigate([path]);
   }
 
-  navigateToDeptAssets(dept: string): void {
-    this.router.navigate(['/assets/view'], { queryParams: { category: dept } });
+  navigateToDeptAssets(deptId: string): void {
+    this.router.navigate(['/assets/view'], { queryParams: { category: deptId } });
   }
 
   goToIssueLog(): void { this.router.navigate(['/assets/issue-log']); }

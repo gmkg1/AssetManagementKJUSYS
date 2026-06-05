@@ -9,6 +9,7 @@ import org.bson.types.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.List;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.regex.Pattern;
@@ -54,6 +55,50 @@ public class AssetsService {
 
     public AssetsService(MongoDatabase mongoDatabase) {
         this.mongoDatabase = mongoDatabase;
+    }
+
+    public JsonObject createIssueAsset(JsonObject payload) {
+      LOGGER.info("Creating issued asset record");
+
+      if (payload == null) {
+        throw new IllegalArgumentException("Request body is required");
+      }
+
+      String assetId = payload.getString("assetId");
+      String issueDate = payload.getString("issueDate");
+      String locationId = payload.getString("locationId");
+      String personId = payload.getString("personId");
+      String issuedToAssetId = payload.getString("issuedToAssetId");
+
+      if (assetId == null || assetId.isBlank()) {
+        throw new IllegalArgumentException("assetId is required");
+      }
+
+      if ((locationId == null || locationId.isBlank())
+        && (personId == null || personId.isBlank())
+        && (issuedToAssetId == null || issuedToAssetId.isBlank())) {
+        throw new IllegalArgumentException("One of locationId, personId, or issuedToAssetId is required");
+      }
+
+      Document issueDocument = new Document("assetId", new ObjectId(assetId.trim()))
+        .append("issueDate", parseIssueDate(issueDate))
+        .append("locationId", toObjectIdOrNull(locationId))
+        .append("personId", toObjectIdOrNull(personId))
+        .append("issuedToAssetId", toObjectIdOrNull(issuedToAssetId));
+
+      MongoCollection<Document> collection =
+        mongoDatabase.getCollection("issueto");
+
+      collection.insertOne(issueDocument);
+
+      return new JsonObject()
+        .put("message", "Asset issued successfully")
+        .put("issueId", objectIdToString(issueDocument.getObjectId("_id")))
+        .put("assetId", assetId.trim())
+        .put("issueDate", dateToString(issueDocument.getDate("issueDate")))
+        .put("locationId", objectIdToString(issueDocument.getObjectId("locationId")))
+        .put("personId", objectIdToString(issueDocument.getObjectId("personId")))
+        .put("issuedToAssetId", objectIdToString(issueDocument.getObjectId("issuedToAssetId")));
     }
 
 
@@ -566,38 +611,179 @@ public class AssetsService {
   }
   public PaginatedResult<JsonObject> getIssuedAssetsDetailed(
     int page,
-    int pageSize) {
+    int pageSize,
+    String assetName,
+    String category,
+    String issuedTo,
+    String type,
+    String issueDate) {
 
     LOGGER.info(
       "Fetching issued assets detailed data page={} pageSize={}",
       page,
       pageSize);
 
+    int skip = (page - 1) * pageSize;
+
     MongoCollection<Document> issueCollection =
       mongoDatabase.getCollection("issueto");
 
-    MongoCollection<Document> assetsCollection =
-      mongoDatabase.getCollection("assets");
+    List<Document> pipeline = new ArrayList<>();
 
-    MongoCollection<Document> locationsCollection =
-      mongoDatabase.getCollection("locations");
+    pipeline.add(new Document("$lookup",
+      new Document("from", "assets")
+        .append("localField", "assetId")
+        .append("foreignField", "_id")
+        .append("as", "asset")));
 
-    MongoCollection<Document> assetTagsCollection =
-      mongoDatabase.getCollection("assettags");
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$asset")
+        .append("preserveNullAndEmptyArrays", true)));
 
-    MongoCollection<Document> categoriesCollection =
-      mongoDatabase.getCollection("categories");
+    pipeline.add(new Document("$lookup",
+      new Document("from", "assettags")
+        .append("localField", "asset.assetTagId")
+        .append("foreignField", "_id")
+        .append("as", "assetTag")));
 
-    int skip = (page - 1) * pageSize;
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$assetTag")
+        .append("preserveNullAndEmptyArrays", true)));
 
-    long totalRecords =
-      issueCollection.countDocuments();
+    pipeline.add(new Document("$lookup",
+      new Document("from", "categories")
+        .append("localField", "assetTag.categoryId")
+        .append("foreignField", "_id")
+        .append("as", "categoryDoc")));
 
-    List<Document> issuedDocs =
-      issueCollection.find()
-        .skip(skip)
-        .limit(pageSize)
-        .into(new ArrayList<>());
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$categoryDoc")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "locations")
+        .append("localField", "locationId")
+        .append("foreignField", "_id")
+        .append("as", "location")));
+
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$location")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+      new Document("from", "assets")
+        .append("localField", "issuedToAssetId")
+        .append("foreignField", "_id")
+        .append("as", "issuedAsset")));
+
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$issuedAsset")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$addFields",
+      new Document("assetName",
+        new Document("$ifNull", Arrays.asList("$asset.assetName", "")))
+        .append("assetCategory",
+          new Document("$ifNull", Arrays.asList("$categoryDoc.categoryName", "")))
+        .append("receiverType",
+          new Document("$switch",
+            new Document("branches", Arrays.asList(
+              new Document("case", new Document("$ne", Arrays.asList("$locationId", null)))
+                .append("then", "Location"),
+              new Document("case", new Document("$ne", Arrays.asList("$issuedToAssetId", null)))
+                .append("then", "Asset"),
+              new Document("case", new Document("$ne", Arrays.asList("$personId", null)))
+                .append("then", "Person")
+            ))
+              .append("default", "Unknown")))
+        .append("receiverName",
+          new Document("$switch",
+            new Document("branches", Arrays.asList(
+              new Document("case", new Document("$ne", Arrays.asList("$locationId", null)))
+                .append("then", new Document("$ifNull", Arrays.asList("$location.locationName", ""))),
+              new Document("case", new Document("$ne", Arrays.asList("$issuedToAssetId", null)))
+                .append("then", new Document("$ifNull", Arrays.asList("$issuedAsset.assetName", ""))),
+              new Document("case", new Document("$ne", Arrays.asList("$personId", null)))
+                .append("then", new Document("$toString", "$personId"))
+            ))
+              .append("default", "")))));
+
+    List<Document> matchConditions = new ArrayList<>();
+
+    if (assetName != null && !assetName.isBlank()) {
+      matchConditions.add(new Document("assetName",
+        new Document("$regex", Pattern.quote(assetName.trim()))
+          .append("$options", "i")));
+    }
+
+    if (category != null && !category.isBlank()) {
+      matchConditions.add(new Document("assetCategory",
+        new Document("$regex", Pattern.quote(category.trim()))
+          .append("$options", "i")));
+    }
+
+    if (issuedTo != null && !issuedTo.isBlank()) {
+      matchConditions.add(new Document("receiverName",
+        new Document("$regex", Pattern.quote(issuedTo.trim()))
+          .append("$options", "i")));
+    }
+
+    if (type != null && !type.isBlank()) {
+      matchConditions.add(new Document("receiverType", type.trim()));
+    }
+
+    if (issueDate != null && !issueDate.isBlank()) {
+      Date parsedDate = java.util.Date.from(
+        java.time.LocalDate.parse(issueDate.trim())
+          .atStartOfDay(java.time.ZoneId.systemDefault())
+          .toInstant());
+      Date start = parsedDate;
+      Date end = java.util.Date.from(
+        java.time.LocalDate.parse(issueDate.trim())
+          .plusDays(1)
+          .atStartOfDay(java.time.ZoneId.systemDefault())
+          .minusNanos(1)
+          .toInstant());
+      matchConditions.add(new Document("issueDate",
+        new Document("$gte", start).append("$lte", end)));
+    }
+
+    if (!matchConditions.isEmpty()) {
+      pipeline.add(new Document("$match",
+        matchConditions.size() == 1
+          ? matchConditions.get(0)
+          : new Document("$and", matchConditions)));
+    }
+
+    pipeline.add(new Document("$facet",
+      new Document("data",
+        List.of(
+          new Document("$skip", skip),
+          new Document("$limit", pageSize)
+        ))
+        .append("metadata",
+          List.of(
+            new Document("$count", "totalRecords")
+          ))));
+
+    Document facetResult =
+      issueCollection.aggregate(pipeline).first();
+
+    long totalRecords = 0;
+
+    List<Document> issuedDocs = new ArrayList<>();
+
+    if (facetResult != null) {
+      List<Document> metadata = facetResult.getList("metadata", Document.class);
+      if (metadata != null && !metadata.isEmpty()) {
+        Number count = (Number) metadata.get(0).get("totalRecords");
+        totalRecords = count.longValue();
+      }
+      List<Document> data = facetResult.getList("data", Document.class);
+      if (data != null) {
+        issuedDocs = data;
+      }
+    }
 
     List<JsonObject> result =
       new ArrayList<>();
@@ -606,49 +792,17 @@ public class AssetsService {
 
       JsonObject json = new JsonObject();
 
-      ObjectId assetId =
-        issueDoc.getObjectId("assetId");
-
-      Document assetDoc =
-        assetsCollection.find(
-            new Document("_id", assetId))
-          .first();
+      Document assetDoc = (Document) issueDoc.get("asset");
+      Document categoryDoc = (Document) issueDoc.get("categoryDoc");
+      Document locationDoc = (Document) issueDoc.get("location");
+      Document issuedAssetDoc = (Document) issueDoc.get("issuedAsset");
 
       if (assetDoc != null) {
+        json.put("assetName", assetDoc.getString("assetName"));
+      }
 
-        json.put(
-          "assetName",
-          assetDoc.getString("assetName"));
-
-        ObjectId assetTagId =
-          assetDoc.getObjectId("assetTagId");
-
-        Document assetTagDoc =
-          assetTagsCollection.find(
-              new Document("_id",
-                assetTagId))
-            .first();
-
-        if (assetTagDoc != null) {
-
-          ObjectId categoryId =
-            assetTagDoc.getObjectId(
-              "categoryId");
-
-          Document categoryDoc =
-            categoriesCollection.find(
-                new Document("_id",
-                  categoryId))
-              .first();
-
-          if (categoryDoc != null) {
-
-            json.put(
-              "assetCategory",
-              categoryDoc.getString(
-                "categoryName"));
-          }
-        }
+      if (categoryDoc != null) {
+        json.put("assetCategory", categoryDoc.getString("categoryName"));
       }
 
       json.put(
@@ -656,66 +810,15 @@ public class AssetsService {
         dateToString(
           issueDoc.getDate("issueDate")));
 
-      ObjectId locationId =
-        issueDoc.getObjectId("locationId");
-
-      ObjectId issuedToAssetId =
-        issueDoc.getObjectId("issuedToAssetId");
-
-      ObjectId personId =
-        issueDoc.getObjectId("personId");
-
-      if (locationId != null) {
-
-        Document locationDoc =
-          locationsCollection.find(
-              new Document("_id",
-                locationId))
-            .first();
-
-        if (locationDoc != null) {
-
-          json.put(
-            "receiverName",
-            locationDoc.getString(
-              "locationName"));
-
-          json.put(
-            "receiverType",
-            "Location");
-        }
-      }
-
-      else if (issuedToAssetId != null) {
-
-        Document issuedAssetDoc =
-          assetsCollection.find(
-              new Document("_id",
-                issuedToAssetId))
-            .first();
-
-        if (issuedAssetDoc != null) {
-
-          json.put(
-            "receiverName",
-            issuedAssetDoc.getString(
-              "assetName"));
-
-          json.put(
-            "receiverType",
-            "Asset");
-        }
-      }
-
-      else if (personId != null) {
-
-        json.put(
-          "receiverName",
-          objectIdToString(personId));
-
-        json.put(
-          "receiverType",
-          "Person");
+      if (locationDoc != null) {
+        json.put("receiverName", locationDoc.getString("locationName"));
+        json.put("receiverType", "Location");
+      } else if (issuedAssetDoc != null) {
+        json.put("receiverName", issuedAssetDoc.getString("assetName"));
+        json.put("receiverType", "Asset");
+      } else if (issueDoc.get("personId") != null) {
+        json.put("receiverName", objectIdToString(issueDoc.getObjectId("personId")));
+        json.put("receiverType", "Person");
       }
 
       result.add(json);
@@ -1113,7 +1216,13 @@ public class AssetsService {
   //Facet  - skip , limit and then paginated Result
   public PaginatedResult<JsonObject> getReturnLogs(
     int page,
-    int pageSize) {
+    int pageSize,
+    String name,
+    String classification,
+    String total,
+    String returnType,
+    String returnTo,
+    String returnDate) {
 
     LOGGER.info(
       "Fetching return logs page={} pageSize={}",
@@ -1177,16 +1286,61 @@ public class AssetsService {
       new Document("path", "$returnedAsset")
         .append("preserveNullAndEmptyArrays", true)));
 
-    pipeline.add(new Document("$project",
-      new Document("assetName", "$asset.assetName")
-        .append("category", "$category.categoryName")
-        .append("total", "$asset.quantity")
-        .append("returnDate", "$returnDate")
-        .append("locationName", "$location.locationName")
-        .append("returnedAssetName", "$returnedAsset.assetName")
-        .append("personId", "$personId")
-        .append("locationId", "$locationId")
-        .append("returnedToAssetId", "$returnedToAssetId")));
+    pipeline.add(new Document("$addFields",
+      new Document("name", new Document("$ifNull", Arrays.asList("$asset.assetName", "")))
+        .append("classification", new Document("$ifNull", Arrays.asList("$category.categoryName", "")))
+        .append("total", new Document("$ifNull", Arrays.asList("$asset.quantity", 0)))
+        .append("returnType", new Document("$switch",
+          new Document("branches", Arrays.asList(
+            new Document("case", new Document("$ne", Arrays.asList("$locationId", null))).append("then", "Location"),
+            new Document("case", new Document("$ne", Arrays.asList("$returnedToAssetId", null))).append("then", "Asset"),
+            new Document("case", new Document("$ne", Arrays.asList("$personId", null))).append("then", "Person")
+          )).append("default", "Unknown")))
+        .append("returnTo", new Document("$switch",
+          new Document("branches", Arrays.asList(
+            new Document("case", new Document("$ne", Arrays.asList("$locationId", null)))
+              .append("then", new Document("$ifNull", Arrays.asList("$location.locationName", ""))),
+            new Document("case", new Document("$ne", Arrays.asList("$returnedToAssetId", null)))
+              .append("then", new Document("$ifNull", Arrays.asList("$returnedAsset.assetName", ""))),
+            new Document("case", new Document("$ne", Arrays.asList("$personId", null)))
+              .append("then", new Document("$toString", "$personId"))
+          )).append("default", "")))
+        .append("returnDateText", new Document("$dateToString",
+          new Document("format", "%Y-%m-%d")
+            .append("date", "$returnDate")))));
+
+    List<Document> matchConditions = new ArrayList<>();
+
+    if (name != null && !name.isBlank()) {
+      matchConditions.add(new Document("name",
+        new Document("$regex", Pattern.quote(name.trim()))
+          .append("$options", "i")));
+    }
+    if (classification != null && !classification.isBlank()) {
+      matchConditions.add(new Document("classification",
+        new Document("$regex", Pattern.quote(classification.trim()))
+          .append("$options", "i")));
+    }
+    if (total != null && !total.isBlank()) {
+      try { matchConditions.add(new Document("total", Integer.parseInt(total.trim()))); } catch (NumberFormatException ignored) {}
+    }
+    if (returnType != null && !returnType.isBlank()) {
+      matchConditions.add(new Document("returnType", returnType.trim()));
+    }
+    if (returnTo != null && !returnTo.isBlank()) {
+      matchConditions.add(new Document("returnTo",
+        new Document("$regex", Pattern.quote(returnTo.trim()))
+          .append("$options", "i")));
+    }
+    if (returnDate != null && !returnDate.isBlank()) {
+      matchConditions.add(new Document("returnDateText",
+        new Document("$regex", Pattern.quote(returnDate.trim()))
+          .append("$options", "i")));
+    }
+    if (!matchConditions.isEmpty()) {
+      pipeline.add(new Document("$match",
+        matchConditions.size() == 1 ? matchConditions.get(0) : new Document("$and", matchConditions)));
+    }
 
     pipeline.add(
       new Document("$facet",
@@ -1229,62 +1383,17 @@ public class AssetsService {
 
       for (Document doc : data) {
 
-        JsonObject json = new JsonObject();
-
-        json.put(
-          "assetName",
-          doc.getString("assetName"));
-
-        json.put(
-          "category",
-          doc.getString("category"));
-
-        json.put(
-          "total",
-          doc.getInteger("total", 0));
-
-        json.put(
-          "returnDate",
-          doc.getDate("returnDate") != null
-            ? dateToString(
-            doc.getDate("returnDate"))
-            : null
+        result.add(
+          new JsonObject()
+            .put("name", doc.getString("name"))
+            .put("classification", doc.getString("classification"))
+            .put("total", doc.getInteger("total", 0))
+            .put("returnType", doc.getString("returnType"))
+            .put("returnTo", doc.getString("returnTo"))
+            .put("returnDate", doc.getDate("returnDate") != null
+              ? dateToString(doc.getDate("returnDate"))
+              : null)
         );
-
-        String issuedFor = "Unknown";
-        String returnType = "Unknown";
-
-        if (doc.get("locationId") != null) {
-
-          issuedFor =
-            doc.getString("locationName");
-
-          returnType =
-            "Location";
-
-        } else if (doc.get("personId") != null) {
-
-          issuedFor =
-            doc.getObjectId("personId")
-              .toHexString();
-
-          returnType =
-            "Person";
-
-        } else if (doc.get("returnedToAssetId") != null) {
-
-          issuedFor =
-            doc.getString(
-              "returnedAssetName");
-
-          returnType =
-            "Asset";
-        }
-
-        json.put("issuedFor", issuedFor);
-        json.put("returnType", returnType);
-
-        result.add(json);
       }
     }
 
@@ -1293,6 +1402,52 @@ public class AssetsService {
       totalRecords,
       page,
       pageSize);
+  }
+
+  public JsonArray searchAssets(String query) {
+    LOGGER.info("Searching assets with query: {}", query);
+    JsonArray result = new JsonArray();
+    MongoCollection<Document> collection = mongoDatabase.getCollection(ASSETS_COLLECTION);
+    
+    List<Document> pipeline = new ArrayList<>();
+    
+    List<Document> matchConditions = new ArrayList<>();
+    if (query != null && !query.isBlank()) {
+      matchConditions.add(new Document("assetName",
+        new Document("$regex", Pattern.quote(query.trim()))
+          .append("$options", "i")));
+    }
+    
+    if (!matchConditions.isEmpty()) {
+      pipeline.add(new Document("$match",
+        matchConditions.size() == 1
+          ? matchConditions.get(0)
+          : new Document("$and", matchConditions)));
+    }
+    
+    // Join assettags to retrieve the tag/model label
+    pipeline.add(new Document("$lookup",
+      new Document("from", "assettags")
+        .append("localField", "assetTagId")
+        .append("foreignField", "_id")
+        .append("as", "assetTag")));
+        
+    pipeline.add(new Document("$unwind",
+      new Document("path", "$assetTag")
+        .append("preserveNullAndEmptyArrays", true)));
+        
+    pipeline.add(new Document("$limit", 20));
+    
+    for (Document doc : collection.aggregate(pipeline)) {
+      Document assetTag = (Document) doc.get("assetTag");
+      String tagLabel = assetTag != null ? assetTag.getString("assetTagName") : "";
+      result.add(new JsonObject()
+        .put("_id", objectIdToString(doc.getObjectId("_id")))
+        .put("assetName", doc.getString("assetName"))
+        .put("assetTagName", tagLabel)
+        .put("isIssuable", doc.getBoolean("isIssuable")));
+    }
+    return result;
   }
 
   private JsonObject toJson(Document asset) {
@@ -1317,5 +1472,21 @@ public class AssetsService {
 
     private String dateToString(Date date) {
         return date == null ? null : date.toInstant().toString();
+    }
+
+    private ObjectId toObjectIdOrNull(String value) {
+      if (value == null || value.isBlank()) {
+        return null;
+      }
+      return new ObjectId(value.trim());
+    }
+
+    private Date parseIssueDate(String value) {
+      if (value == null || value.isBlank()) {
+        return new Date();
+      }
+      return Date.from(java.time.LocalDate.parse(value.trim())
+        .atStartOfDay(java.time.ZoneId.systemDefault())
+        .toInstant());
     }
 }

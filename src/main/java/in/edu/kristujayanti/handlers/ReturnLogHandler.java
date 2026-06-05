@@ -47,9 +47,15 @@ public class ReturnLogHandler implements Handler<RoutingContext> {
           ? "10"
           : routingContext.request().getParam("pageSize")
       );
+      String name = routingContext.request().getParam("name");
+      String classification = routingContext.request().getParam("classification");
+      String total = routingContext.request().getParam("total");
+      String returnType = routingContext.request().getParam("returnType");
+      String returnTo = routingContext.request().getParam("returnTo");
+      String returnDate = routingContext.request().getParam("returnDate");
 
       PaginatedResult<JsonObject> result =
-        assetsService.getReturnLogs(page, pageSize);
+        assetsService.getReturnLogs(page, pageSize, name, classification, total, returnType, returnTo, returnDate);
 
       ResponseUtil.createResponse(
         response,

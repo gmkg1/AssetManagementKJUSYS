@@ -47,6 +47,11 @@ public class IssuedAssetsHandler implements Handler<RoutingContext> {
           ? routingContext.request().getParam("pageSize")
           : "10"
       );
+      String assetName = routingContext.request().getParam("assetName");
+      String category = routingContext.request().getParam("category");
+      String issuedTo = routingContext.request().getParam("issuedTo");
+      String type = routingContext.request().getParam("type");
+      String issueDate = routingContext.request().getParam("issueDate");
 
       page = Math.max(page, 1);
       pageSize = Math.max(1, Math.min(pageSize, 100));
@@ -54,7 +59,12 @@ public class IssuedAssetsHandler implements Handler<RoutingContext> {
       PaginatedResult<JsonObject> result =
         assetsService.getIssuedAssetsDetailed(
           page,
-          pageSize
+          pageSize,
+          assetName,
+          category,
+          issuedTo,
+          type,
+          issueDate
         );
 
       JsonArray assets = new JsonArray();

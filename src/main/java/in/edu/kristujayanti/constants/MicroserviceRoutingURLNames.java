@@ -13,14 +13,14 @@ public interface MicroserviceRoutingURLNames {
     String HEALTH_URL = "/health";
 
     String ASSETS_URL = "/assets";
+    String ASSETS_SEARCH = "/assets-search";
     String CATEGORIES = "/categories";
     String RETURN = "/return-logs";
     String ASSETSTATUSSUMMARY = "/asset-status-summary";
     String ISSUEDASSETS = "/issued-assets";
+    String ISSUEASSET = "/issue-asset";
     String GRP = "/grp";
     String STATUS = "/status";
     String LOCATIONSLIST = "/locations-list";
     String STATUSESLIST = "/statuses-list";
-
-
 }
