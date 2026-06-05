@@ -21,7 +21,7 @@
 
     <!-- Collapsed: icon button -->
     <div *ngIf="!sidebarOpen" class="flex flex-col items-center py-3">
-      <button class="flex flex-col items-center gap-1 w-10 py-2 rounded-lg bg-black text-white hover:bg-slate-800 transition-colors duration-150"
+      <button class="flex flex-col items-center gap-1 w-10 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-150"
         (click)="sidebarOpen = true">
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" class="w-4 h-4">
           <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z"/>
@@ -67,6 +67,12 @@
           </svg>
           Issue Asset
         </button>
+        <button class="flex items-center gap-2 px-2 py-2 rounded-md text-[11px] font-medium w-full text-left text-slate-600 hover:bg-slate-100 transition-colors duration-150 whitespace-nowrap" (click)="goToIssueLog()">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5 flex-shrink-0">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/>
+          </svg>
+          Issue Log
+        </button>
         <button class="flex items-center gap-2 px-2 py-2 rounded-md text-[11px] font-medium w-full text-left bg-blue-600 text-white whitespace-nowrap">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" class="w-3.5 h-3.5 flex-shrink-0">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3"/>
@@ -106,6 +112,10 @@
           <div class="flex flex-col justify-between px-4 py-3 rounded-xl bg-white text-slate-700 w-44 cursor-pointer shadow-sm hover:shadow-md transition-shadow duration-150" (click)="goToIssueAsset()">
             <span class="text-xs font-semibold">Issue Asset</span>
             <span class="text-[10px] text-slate-400 mt-1">Assign to a user</span>
+          </div>
+          <div class="flex flex-col justify-between px-4 py-3 rounded-xl bg-white text-slate-700 w-44 cursor-pointer shadow-sm hover:shadow-md transition-shadow duration-150" (click)="goToIssueLog()">
+            <span class="text-xs font-semibold">Issue Log</span>
+            <span class="text-[10px] text-slate-400 mt-1">Track issued assets</span>
           </div>
           <div class="flex flex-col justify-between px-4 py-3 rounded-xl bg-blue-700 text-white w-44 cursor-pointer shadow-sm">
             <span class="text-xs font-bold">Return Log</span>
@@ -189,12 +199,37 @@
 
         <!-- Table header -->
         <div class="grid return-cols px-4 py-2 bg-slate-50 border-b border-slate-200">
-          <span class="text-[10px] text-slate-400 font-medium">Name</span>
+          <div class="flex items-center gap-2">
+            <div class="w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 cursor-pointer transition-all"
+              [class.bg-blue-600]="allChecked" [class.border-blue-600]="allChecked" [class.border-slate-300]="!allChecked"
+              (click)="toggleAll()">
+              <svg *ngIf="allChecked" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="3" class="w-2.5 h-2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+              </svg>
+              <svg *ngIf="someChecked && !allChecked" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="3" class="w-2.5 h-2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14"/>
+              </svg>
+            </div>
+            <span class="text-[10px] text-slate-400 font-medium">Name</span>
+          </div>
           <span class="text-[10px] text-slate-400 font-medium">Classification</span>
           <span class="text-[10px] text-slate-400 font-medium">Total</span>
           <span class="text-[10px] text-slate-400 font-medium">Return Type</span>
           <span class="text-[10px] text-slate-400 font-medium">Return To</span>
           <span class="text-[10px] text-slate-400 font-medium">Return Date</span>
+        </div>
+
+        <!-- Bulk action bar -->
+        <div *ngIf="selectedCount > 0" class="flex items-center gap-3 px-4 py-2 bg-blue-50 border-b border-blue-100">
+          <span class="text-[10px] font-medium text-blue-700">{{ selectedCount }} selected</span>
+          <button class="flex items-center gap-1 h-6 px-2.5 rounded-lg bg-blue-600 text-white text-[10px] font-medium hover:bg-blue-700 transition-colors active:scale-95"
+            (click)="bulkExportSelected()">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" class="w-3 h-3">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+            </svg>
+            Export Selected
+          </button>
+          <button class="text-[10px] text-slate-500 hover:text-slate-700 transition-colors" (click)="clearSelection()">Clear</button>
         </div>
 
         <!-- Empty state -->
@@ -208,10 +243,20 @@
         <!-- Rows -->
         <ng-container *ngFor="let row of pagedRecords; let i = index">
           <div class="grid return-cols px-4 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer transition-colors hover:bg-blue-50"
-            [class.bg-white]="i % 2 === 0" [class.bg-slate-50]="i % 2 !== 0">
-            <div class="flex flex-col gap-0.5">
-              <span class="text-xs font-medium text-slate-800">{{ row.assetName }}</span>
-              <span class="text-[10px] text-slate-400">{{ row.assetTag }}</span>
+            [class.bg-white]="i % 2 === 0" [class.bg-slate-50]="i % 2 !== 0"
+            [class.bg-blue-50]="row.selected">
+            <div class="flex items-center gap-2">
+              <div class="w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 cursor-pointer transition-all"
+                [class.bg-blue-600]="row.selected" [class.border-blue-600]="row.selected" [class.border-slate-300]="!row.selected"
+                (click)="toggleRow(row); $event.stopPropagation()">
+                <svg *ngIf="row.selected" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="3" class="w-2.5 h-2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                </svg>
+              </div>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-xs font-medium text-slate-800">{{ row.assetName }}</span>
+                <span class="text-[10px] text-slate-400">{{ row.assetTag }}</span>
+              </div>
             </div>
             <span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700" [ngClass]="getClassClass(row.classification)">{{ row.classification }}</span>

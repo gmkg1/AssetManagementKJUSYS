@@ -147,6 +147,8 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
 
   goToIssueAsset(): void { this.router.navigate(['/assets/issue']); }
 
+  goToIssueLog(): void { this.router.navigate(['/assets/issue-log']); }
+
   goToReturnLog(): void { this.router.navigate(['/assets/return-log']); }
 
   goToReports(): void { this.router.navigate(['/assets/reports']); }

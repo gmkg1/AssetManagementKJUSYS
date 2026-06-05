@@ -10,6 +10,7 @@ import { AssetDashboardComponent } from './asset-management/asset-dashboard/asse
 import { ViewAssetsComponent } from './asset-management/view-assets/view-assets.component';
 import { IssueAssetComponent } from './asset-management/issue-asset/issue-asset.component';
 import { ReturnLogComponent } from './asset-management/return-log/return-log.component';
+import { IssueLogComponent } from './asset-management/issue-log/issue-log.component';
 import { ReportsComponent } from './asset-management/reports/reports.component';
 import { CreateAssetTagComponent } from './asset-management/create-asset-tag/create-asset-tag.component';
 import { CreateAssetComponent } from './asset-management/create-asset/create-asset.component';
@@ -21,6 +22,7 @@ import { CreateAssetComponent } from './asset-management/create-asset/create-ass
     ViewAssetsComponent,
     IssueAssetComponent,
     ReturnLogComponent,
+    IssueLogComponent,
     ReportsComponent,
     CreateAssetTagComponent,
     CreateAssetComponent,

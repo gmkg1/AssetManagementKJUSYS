@@ -64,6 +64,7 @@ export class IssueAssetComponent implements OnInit, OnDestroy {
 
   goBack(): void { this.router.navigate(['/assets/view']); }
   goToDashboard(): void { this.router.navigate(['/']); }
+  goToIssueLog():  void { this.router.navigate(['/assets/issue-log']); }
   goToReturnLog(): void { this.router.navigate(['/assets/return-log']); }
   goToReports(): void { this.router.navigate(['/assets/reports']); }
 

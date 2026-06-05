@@ -10,6 +10,7 @@ export interface ReturnRecord {
   returnTo: string;
   returnDate: string;
   department: string;
+  selected: boolean;
 }
 
 const PAGE_SIZE = 8;
@@ -54,35 +55,35 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
 
   // ── Data ────────────────────────────────────────────────────────────────────
   allRecords: ReturnRecord[] = [
-    { assetName: 'Laptops',           assetTag: '1210073015', classification: 'Asset',      total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Desktops',          assetTag: '1210073015', classification: 'Asset',      total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'VOIP Phones',       assetTag: '1210073015', classification: 'Component',  total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Displays',          assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Tablets',           assetTag: '1210073015', classification: 'Accessory',  total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'CCTV',              assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Keyboards',         assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Mouse',             assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Servers',           assetTag: '1210073015', classification: 'Asset',      total: 12,  returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Routers',           assetTag: '1210073015', classification: 'Asset',      total: 45,  returnType: '', returnTo: '', returnDate: '', department: 'I.T' },
-    { assetName: 'Projectors',        assetTag: '1210073016', classification: 'Asset',      total: 40,  returnType: '', returnTo: '', returnDate: '', department: 'Electrical' },
-    { assetName: 'UPS Units',         assetTag: '1210073017', classification: 'Asset',      total: 25,  returnType: '', returnTo: '', returnDate: '', department: 'Electrical' },
-    { assetName: 'Air Conditioners',  assetTag: '1210073018', classification: 'Asset',      total: 60,  returnType: '', returnTo: '', returnDate: '', department: 'Electrical' },
-    { assetName: 'Fans',              assetTag: '1210073019', classification: 'Consumable', total: 200, returnType: '', returnTo: '', returnDate: '', department: 'Electrical' },
-    { assetName: 'Extension Boards',  assetTag: '1210073020', classification: 'Accessory',  total: 150, returnType: '', returnTo: '', returnDate: '', department: 'Electrical' },
-    { assetName: 'PA Speakers',       assetTag: '1210073021', classification: 'Asset',      total: 18,  returnType: '', returnTo: '', returnDate: '', department: 'Sound' },
-    { assetName: 'Wireless Mics',     assetTag: '1210073022', classification: 'Asset',      total: 30,  returnType: '', returnTo: '', returnDate: '', department: 'Sound' },
-    { assetName: 'Amplifiers',        assetTag: '1210073023', classification: 'Component',  total: 12,  returnType: '', returnTo: '', returnDate: '', department: 'Sound' },
-    { assetName: 'Mixers',            assetTag: '1210073024', classification: 'Asset',      total: 8,   returnType: '', returnTo: '', returnDate: '', department: 'Sound' },
-    { assetName: 'Whiteboard Markers',assetTag: '1210073025', classification: 'Consumable', total: 500, returnType: '', returnTo: '', returnDate: '', department: 'Stationery' },
-    { assetName: 'Laser Pointers',    assetTag: '1210073026', classification: 'Accessory',  total: 20,  returnType: '', returnTo: '', returnDate: '', department: 'Stationery' },
-    { assetName: 'Staplers',          assetTag: '1210073027', classification: 'Consumable', total: 80,  returnType: '', returnTo: '', returnDate: '', department: 'Stationery' },
-    { assetName: 'Mop & Bucket Sets', assetTag: '1210073028', classification: 'Consumable', total: 60,  returnType: '', returnTo: '', returnDate: '', department: 'Housekeeping' },
-    { assetName: 'Vacuum Cleaners',   assetTag: '1210073029', classification: 'Asset',      total: 15,  returnType: '', returnTo: '', returnDate: '', department: 'Housekeeping' },
-    { assetName: 'Cleaning Trolleys', assetTag: '1210073030', classification: 'Asset',      total: 20,  returnType: '', returnTo: '', returnDate: '', department: 'Housekeeping' },
-    { assetName: 'Office Chairs',     assetTag: '1210073031', classification: 'Asset',      total: 400, returnType: '', returnTo: '', returnDate: '', department: 'Furnitures' },
-    { assetName: 'Standing Desks',    assetTag: '1210073032', classification: 'Asset',      total: 50,  returnType: '', returnTo: '', returnDate: '', department: 'Furnitures' },
-    { assetName: 'Conference Tables', assetTag: '1210073033', classification: 'Asset',      total: 12,  returnType: '', returnTo: '', returnDate: '', department: 'Furnitures' },
-    { assetName: 'Bookshelves',       assetTag: '1210073034', classification: 'Asset',      total: 80,  returnType: '', returnTo: '', returnDate: '', department: 'Furnitures' },
+    { assetName: 'Laptops',           assetTag: '1210073015', classification: 'Asset',      total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T',          selected: false },
+    { assetName: 'Desktops',          assetTag: '1210073015', classification: 'Asset',      total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T',          selected: false },
+    { assetName: 'VOIP Phones',       assetTag: '1210073015', classification: 'Component',  total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T',          selected: false },
+    { assetName: 'Displays',          assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T',          selected: false },
+    { assetName: 'Tablets',           assetTag: '1210073015', classification: 'Accessory',  total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T',          selected: false },
+    { assetName: 'CCTV',              assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T',          selected: false },
+    { assetName: 'Keyboards',         assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T',          selected: false },
+    { assetName: 'Mouse',             assetTag: '1210073015', classification: 'Consumable', total: 320, returnType: '', returnTo: '', returnDate: '', department: 'I.T',          selected: false },
+    { assetName: 'Servers',           assetTag: '1210073015', classification: 'Asset',      total: 12,  returnType: '', returnTo: '', returnDate: '', department: 'I.T',          selected: false },
+    { assetName: 'Routers',           assetTag: '1210073015', classification: 'Asset',      total: 45,  returnType: '', returnTo: '', returnDate: '', department: 'I.T',          selected: false },
+    { assetName: 'Projectors',        assetTag: '1210073016', classification: 'Asset',      total: 40,  returnType: '', returnTo: '', returnDate: '', department: 'Electrical',   selected: false },
+    { assetName: 'UPS Units',         assetTag: '1210073017', classification: 'Asset',      total: 25,  returnType: '', returnTo: '', returnDate: '', department: 'Electrical',   selected: false },
+    { assetName: 'Air Conditioners',  assetTag: '1210073018', classification: 'Asset',      total: 60,  returnType: '', returnTo: '', returnDate: '', department: 'Electrical',   selected: false },
+    { assetName: 'Fans',              assetTag: '1210073019', classification: 'Consumable', total: 200, returnType: '', returnTo: '', returnDate: '', department: 'Electrical',   selected: false },
+    { assetName: 'Extension Boards',  assetTag: '1210073020', classification: 'Accessory',  total: 150, returnType: '', returnTo: '', returnDate: '', department: 'Electrical',   selected: false },
+    { assetName: 'PA Speakers',       assetTag: '1210073021', classification: 'Asset',      total: 18,  returnType: '', returnTo: '', returnDate: '', department: 'Sound',        selected: false },
+    { assetName: 'Wireless Mics',     assetTag: '1210073022', classification: 'Asset',      total: 30,  returnType: '', returnTo: '', returnDate: '', department: 'Sound',        selected: false },
+    { assetName: 'Amplifiers',        assetTag: '1210073023', classification: 'Component',  total: 12,  returnType: '', returnTo: '', returnDate: '', department: 'Sound',        selected: false },
+    { assetName: 'Mixers',            assetTag: '1210073024', classification: 'Asset',      total: 8,   returnType: '', returnTo: '', returnDate: '', department: 'Sound',        selected: false },
+    { assetName: 'Whiteboard Markers',assetTag: '1210073025', classification: 'Consumable', total: 500, returnType: '', returnTo: '', returnDate: '', department: 'Stationery',   selected: false },
+    { assetName: 'Laser Pointers',    assetTag: '1210073026', classification: 'Accessory',  total: 20,  returnType: '', returnTo: '', returnDate: '', department: 'Stationery',   selected: false },
+    { assetName: 'Staplers',          assetTag: '1210073027', classification: 'Consumable', total: 80,  returnType: '', returnTo: '', returnDate: '', department: 'Stationery',   selected: false },
+    { assetName: 'Mop & Bucket Sets', assetTag: '1210073028', classification: 'Consumable', total: 60,  returnType: '', returnTo: '', returnDate: '', department: 'Housekeeping', selected: false },
+    { assetName: 'Vacuum Cleaners',   assetTag: '1210073029', classification: 'Asset',      total: 15,  returnType: '', returnTo: '', returnDate: '', department: 'Housekeeping', selected: false },
+    { assetName: 'Cleaning Trolleys', assetTag: '1210073030', classification: 'Asset',      total: 20,  returnType: '', returnTo: '', returnDate: '', department: 'Housekeeping', selected: false },
+    { assetName: 'Office Chairs',     assetTag: '1210073031', classification: 'Asset',      total: 400, returnType: '', returnTo: '', returnDate: '', department: 'Furnitures',   selected: false },
+    { assetName: 'Standing Desks',    assetTag: '1210073032', classification: 'Asset',      total: 50,  returnType: '', returnTo: '', returnDate: '', department: 'Furnitures',   selected: false },
+    { assetName: 'Conference Tables', assetTag: '1210073033', classification: 'Asset',      total: 12,  returnType: '', returnTo: '', returnDate: '', department: 'Furnitures',   selected: false },
+    { assetName: 'Bookshelves',       assetTag: '1210073034', classification: 'Asset',      total: 80,  returnType: '', returnTo: '', returnDate: '', department: 'Furnitures',   selected: false },
   ];
 
   // ── Computed ─────────────────────────────────────────────────────────────────
@@ -102,6 +103,10 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
     const start = (this.currentPage - 1) * PAGE_SIZE;
     return this.filteredRecords.slice(start, start + PAGE_SIZE);
   }
+
+  get selectedCount(): number { return this.pagedRecords.filter(r => r.selected).length; }
+  get allChecked(): boolean { return this.pagedRecords.length > 0 && this.pagedRecords.every(r => r.selected); }
+  get someChecked(): boolean { return this.pagedRecords.some(r => r.selected) && !this.allChecked; }
 
   get visiblePages(): number[] {
     const total = this.totalPages;
@@ -163,15 +168,38 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
     this.searchQuery = '';
     this.currentPage = 1;
     this.selectedRecord = null;
+    this.clearSelection();
   }
 
-  prevPage(): void { if (this.currentPage > 1) this.currentPage--; }
-  nextPage(): void { if (this.currentPage < this.totalPages) this.currentPage++; }
-  goToPage(p: number): void { this.currentPage = p; }
+  prevPage(): void { if (this.currentPage > 1) { this.currentPage--; this.clearSelection(); } }
+  nextPage(): void { if (this.currentPage < this.totalPages) { this.currentPage++; this.clearSelection(); } }
+  goToPage(p: number): void { this.currentPage = p; this.clearSelection(); }
+
+  // ── Multi-select ─────────────────────────────────────────────────────────────
+  toggleAll(): void {
+    const next = !this.allChecked;
+    this.pagedRecords.forEach(r => r.selected = next);
+  }
+
+  toggleRow(row: ReturnRecord): void { row.selected = !row.selected; }
+
+  clearSelection(): void { this.pagedRecords.forEach(r => r.selected = false); }
+
+  bulkExportSelected(): void {
+    const rows = this.pagedRecords.filter(r => r.selected);
+    if (!rows.length) return;
+    const headers = ['Name', 'Asset Tag', 'Classification', 'Total', 'Return Type', 'Return To', 'Return Date', 'Department'];
+    const csv = [
+      headers.join(','),
+      ...rows.map(r => [r.assetName, r.assetTag, r.classification, r.total, r.returnType || '—', r.returnTo || '—', r.returnDate || '—', r.department].join(','))
+    ].join('\n');
+    this.downloadCSV(csv, `return-log-selected.csv`);
+  }
 
   goToDashboard(): void  { this.router.navigate(['/']); }
   goToViewAssets(): void { this.router.navigate(['/assets/view']); }
   goToIssueAsset(): void { this.router.navigate(['/assets/issue']); }
+  goToIssueLog():   void { this.router.navigate(['/assets/issue-log']); }
   goToReports(): void    { this.router.navigate(['/assets/reports']); }
 
   // ── Row click ─────────────────────────────────────────────────────────────────

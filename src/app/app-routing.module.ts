@@ -4,6 +4,7 @@ import { AssetDashboardComponent } from './asset-management/asset-dashboard/asse
 import { ViewAssetsComponent } from './asset-management/view-assets/view-assets.component';
 import { IssueAssetComponent } from './asset-management/issue-asset/issue-asset.component';
 import { ReturnLogComponent } from './asset-management/return-log/return-log.component';
+import { IssueLogComponent } from './asset-management/issue-log/issue-log.component';
 import { ReportsComponent } from './asset-management/reports/reports.component';
 import { CreateAssetTagComponent } from './asset-management/create-asset-tag/create-asset-tag.component';
 import { CreateAssetComponent } from './asset-management/create-asset/create-asset.component';
@@ -13,6 +14,7 @@ const routes: Routes = [
   { path: 'assets/view',         component: ViewAssetsComponent },
   { path: 'assets/issue',        component: IssueAssetComponent },
   { path: 'assets/return-log',   component: ReturnLogComponent },
+  { path: 'assets/issue-log',    component: IssueLogComponent },
   { path: 'assets/reports',      component: ReportsComponent },
   { path: 'assets/create-tag',   component: CreateAssetTagComponent },
   { path: 'assets/create',       component: CreateAssetComponent },
