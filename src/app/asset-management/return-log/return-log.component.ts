@@ -1,16 +1,16 @@
-import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AssetService } from '../../services/asset.service';
 
 export interface ReturnRecord {
-  assetName:      string;
-  assetTag:       string;
+  assetName: string;
+  assetTag: string;
   classification: string;
-  total:          number;
-  returnType:     string;
-  returnTo:       string;
-  returnDate:     string;
-  department:     string;
+  total: number;
+  returnType: string;
+  returnTo: string;
+  returnDate: string;
+  department: string;
 }
 
 @Component({
@@ -19,30 +19,31 @@ export interface ReturnRecord {
   styleUrls: ['./return-log.component.scss'],
 })
 export class ReturnLogComponent implements OnInit, OnDestroy {
-
-  assetsDropdownOpen = false;
-  sidebarOpen        = false;
-  isLoading          = true;
+  sidebarOpen = false;
+  isLoading = true;
   apiError: string | null = null;
-  searchQuery        = '';
 
-  // ── Filter ───────────────────────────────────────────────────────────────────
-  filterOpen = false;
-  filterClassifications: string[] = [];
-  readonly classificationFilterOptions = ['Asset', 'Component', 'Consumable', 'Accessory'];
+  nameQuery = '';
+  classificationQuery = '';
+  totalQuery = '';
+  returnTypeQuery = '';
+  returnToQuery = '';
+  returnDateQuery = '';
 
-  // ── View ─────────────────────────────────────────────────────────────────────
   selectedRecord: ReturnRecord | null = null;
-
-  // ── Department tabs ───────────────────────────────────────────────────────────
-  departments: string[] = [];
-  activeDept  = '';
-
-  // ── Server-side pagination ────────────────────────────────────────────────────
-  currentPage  = 1;
-  totalPagesVal = 1;   // backing value — avoid getter/property clash
+  currentPage = 1;
+  totalPagesVal = 1;
   totalRecords = 0;
-  pageSize     = 10;
+  pageSize = 10;
+  allRecords: ReturnRecord[] = [];
+
+  formAssetName = '';
+  formAssetTag = '';
+  formClassification = '';
+  formTotal: number | null = null;
+  formReturnType = '';
+  formReturnTo = '';
+  formReturnDate = '';
 
   get totalPages(): number { return this.totalPagesVal; }
 
@@ -55,35 +56,6 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
     return pages;
   }
 
-  // ── Form ─────────────────────────────────────────────────────────────────────
-  formAssetName      = '';
-  formAssetTag       = '';
-  formClassification = '';
-  formTotal: number | null = null;
-  formReturnType     = '';
-  formReturnTo       = '';
-  formReturnDate     = '';
-
-  classificationOptions = ['Asset', 'Component', 'Consumable', 'Accessory'];
-  returnTypeOptions     = ['Permanent Return', 'Temporary Return', 'Damaged Return', 'Lost Report'];
-  returnToOptions       = ['IT Department', 'Admin Office', 'Library', 'Lab Store', 'Principal Office'];
-
-  // ── Data ─────────────────────────────────────────────────────────────────────
-  allRecords: ReturnRecord[] = [];
-
-  get pagedRecords(): ReturnRecord[] {
-    const q = this.searchQuery.toLowerCase();
-    return this.allRecords.filter(r => {
-      const matchesDept = !this.activeDept || r.department === this.activeDept;
-      const matchSearch = !q || r.assetName.toLowerCase().includes(q) || r.returnTo.toLowerCase().includes(q);
-      const matchClass  = this.filterClassifications.length === 0 || this.filterClassifications.includes(r.classification);
-      return matchesDept && matchSearch && matchClass;
-    });
-  }
-
-  // keep filteredRecords alias for CSV export
-  get filteredRecords(): ReturnRecord[] { return this.pagedRecords; }
-
   constructor(private router: Router, private assetService: AssetService) {}
 
   ngOnInit(): void { this.loadReturnLogs(); }
@@ -91,35 +63,36 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
 
   private loadReturnLogs(): void {
     this.isLoading = true;
-    this.apiError  = null;
+    this.apiError = null;
 
-    this.assetService.getReturnLogs(this.currentPage, this.pageSize).subscribe({
+    this.assetService.getReturnLogs({
+      page: this.currentPage,
+      pageSize: this.pageSize,
+      name: this.nameQuery.trim() || undefined,
+      classification: this.classificationQuery.trim() || undefined,
+      total: this.totalQuery.trim() || undefined,
+      returnType: this.returnTypeQuery.trim() || undefined,
+      returnTo: this.returnToQuery.trim() || undefined,
+      returnDate: this.returnDateQuery || undefined,
+    }).subscribe({
       next: (response: any) => {
         const data = response?.responseData?.data ?? {};
-        // return-logs uses data.data instead of data.assets
         const raw: any[] = data.data ?? data.assets ?? [];
-
-        this.totalRecords  = data.totalRecords ?? raw.length;
-        this.totalPagesVal = data.totalPages   ?? 1;
-        this.currentPage   = data.currentPage  ?? this.currentPage;
-
-        this.allRecords = raw.map(item => ({
-          assetName:      item.assetName  ?? '—',
-          assetTag:       item.assetName  ?? '—',
-          classification: 'Asset' as const,
-          total:          item.total      ?? 0,
-          returnType:     item.returnType ?? '—',
-          returnTo:       item.issuedFor  ?? '—',
-          returnDate:     item.returnDate
+        this.totalRecords = data.totalRecords ?? raw.length;
+        this.totalPagesVal = data.totalPages ?? 1;
+        this.currentPage = data.currentPage ?? this.currentPage;
+        this.allRecords = raw.map((item: any) => ({
+          assetName: item.name ?? item.assetName ?? '—',
+          assetTag: item.name ?? item.assetName ?? '—',
+          classification: item.classification ?? '—',
+          total: item.total ?? 0,
+          returnType: item.returnType ?? '—',
+          returnTo: item.returnTo ?? item.issuedFor ?? '—',
+          returnDate: item.returnDate
             ? new Date(item.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
             : '—',
-          department: item.category ?? 'Other'
+          department: item.classification ?? 'Other',
         }));
-
-        this.departments = [...new Set(this.allRecords.map(r => r.department))];
-        if (!this.activeDept || !this.departments.includes(this.activeDept)) {
-          this.activeDept = this.departments[0] ?? '';
-        }
         this.isLoading = false;
       },
       error: (err: any) => {
@@ -130,80 +103,56 @@ export class ReturnLogComponent implements OnInit, OnDestroy {
     });
   }
 
-  @HostListener('document:click')
-  onDocumentClick(): void { this.sidebarOpen = false; this.filterOpen = false; }
-
-  toggleFilterPanel(event: Event): void { event.stopPropagation(); this.filterOpen = !this.filterOpen; }
-
-  toggleClassFilter(c: string): void {
-    const i = this.filterClassifications.indexOf(c);
-    if (i === -1) this.filterClassifications.push(c); else this.filterClassifications.splice(i, 1);
+  onFilterChange(): void {
     this.currentPage = 1;
+    this.loadReturnLogs();
   }
 
-  clearFilters(): void { this.filterClassifications = []; this.currentPage = 1; }
-
-  exportCSV(): void {
-    const headers = ['Name', 'Category', 'Total', 'Return Type', 'Returned To', 'Return Date'];
-    const csv = [
-      headers.join(','),
-      ...this.filteredRecords.map(r =>
-        [r.assetName, r.department, r.total, r.returnType, r.returnTo, r.returnDate].join(',')
-      )
-    ].join('\n');
-    this.downloadCSV(csv, `return-log-${this.activeDept}.csv`);
+  clearFilters(): void {
+    this.nameQuery = '';
+    this.classificationQuery = '';
+    this.totalQuery = '';
+    this.returnTypeQuery = '';
+    this.returnToQuery = '';
+    this.returnDateQuery = '';
+    this.currentPage = 1;
+    this.loadReturnLogs();
   }
 
-  private downloadCSV(content: string, filename: string): void {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  setDept(dept: string): void {
-    this.activeDept     = dept;
-    this.searchQuery    = '';
-    this.currentPage    = 1;
-    this.selectedRecord = null;
-  }
+  @HostListener('document:click')
+  onDocumentClick(): void { this.sidebarOpen = false; }
 
   prevPage(): void { if (this.currentPage > 1) { this.currentPage--; this.loadReturnLogs(); } }
   nextPage(): void { if (this.currentPage < this.totalPagesVal) { this.currentPage++; this.loadReturnLogs(); } }
   goToPage(p: number): void { if (p !== this.currentPage) { this.currentPage = p; this.loadReturnLogs(); } }
 
-  goToDashboard(): void  { this.router.navigate(['/']); }
+  goToDashboard(): void { this.router.navigate(['/']); }
   goToViewAssets(): void { this.router.navigate(['/assets/view']); }
   goToIssueAsset(): void { this.router.navigate(['/assets/issue']); }
-  goToIssueLog(): void   { this.router.navigate(['/assets/issue-log']); }
-  goToReports(): void    { this.router.navigate(['/assets/reports']); }
+  goToIssueLog(): void { this.router.navigate(['/assets/issue-log']); }
+  goToReports(): void { this.router.navigate(['/assets/reports']); }
 
-  openDetail(row: ReturnRecord): void {
-    this.selectedRecord     = row;
-    this.formAssetName      = row.assetName;
-    this.formAssetTag       = row.assetTag;
-    this.formClassification = row.classification;
-    this.formTotal          = row.total;
-    this.formReturnType     = row.returnType;
-    this.formReturnTo       = row.returnTo;
-    this.formReturnDate     = row.returnDate;
-  }
-
-  closeDetail(): void { this.selectedRecord = null; }
-
-  onSubmit(): void {
-    if (!this.selectedRecord) return;
-    this.selectedRecord.returnType = this.formReturnType;
-    this.selectedRecord.returnTo   = this.formReturnTo;
-    this.selectedRecord.returnDate = this.formReturnDate;
-    this.closeDetail();
+  exportCSV(): void {
+    const headers = ['Name', 'Classification', 'Total', 'Return Type', 'Return To', 'Return Date'];
+    const csv = [
+      headers.join(','),
+      ...this.allRecords.map(r => [r.assetName, r.classification, r.total, r.returnType, r.returnTo, r.returnDate].join(','))
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `return-log.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   getClassClass(c: string): string {
     const map: Record<string, string> = {
-      'Asset': 'class-asset', 'Component': 'class-component',
-      'Consumable': 'class-consumable', 'Accessory': 'class-accessory'
+      Asset: 'class-asset',
+      Component: 'class-component',
+      Consumable: 'class-consumable',
+      Accessory: 'class-accessory'
     };
     return map[c] ?? 'class-asset';
   }

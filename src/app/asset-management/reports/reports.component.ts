@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AssetService } from '../../services/asset.service';
 
@@ -24,37 +24,24 @@ const PAGE_SIZE = 10;
   styleUrls: ['./reports.component.scss']
 })
 export class ReportsComponent implements OnInit, OnDestroy {
-
-  // ── state ────────────────────────────────────────────────────────────────────
-  departments: string[] = [];
-  // Fixed full category list — always available regardless of current page
+  readonly allTab = 'All';
   readonly allCategories = ['IT', 'Electrical', 'Sound', 'Stationery', 'Housekeeping', 'Furniture'];
-  activeDept  = '';
+
+  departments: string[] = [this.allTab];
+  activeDept = this.allTab;
   searchQuery = '';
   currentPage = 1;
-  allChecked  = false;
+  allChecked = false;
   sidebarOpen = false;
-  isLoading   = true;
+  isLoading = true;
   apiError: string | null = null;
 
-  // ── filter ───────────────────────────────────────────────────────────────────
-  filterOpen   = false;
-  filterTypes: string[] = [];
-  readonly typeFilterOptions = ['Asset', 'Component', 'Consumable', 'Accessory'];
-
-  toggleTypeFilter(t: string): void {
-    const i = this.filterTypes.indexOf(t);
-    if (i === -1) this.filterTypes.push(t); else this.filterTypes.splice(i, 1);
-    this.currentPage = 1;
-  }
-
-  // ── data — ALL loaded upfront, paginated client-side per dept ─────────────────
   private allAssets: Record<string, ReportAsset[]> = {};
-  private allPagesLoaded = false;
 
-  // ── computed ─────────────────────────────────────────────────────────────────
   get assets(): ReportAsset[] {
-    const list = this.allAssets[this.activeDept] ?? [];
+    const list = this.activeDept === this.allTab
+      ? Object.values(this.allAssets).flat()
+      : (this.allAssets[this.activeDept] ?? []);
     const q = this.searchQuery.toLowerCase().trim();
     return list.filter(a => !q || a.name.toLowerCase().includes(q));
   }
@@ -75,36 +62,28 @@ export class ReportsComponent implements OnInit, OnDestroy {
   }
   get selectedCount(): number { return this.pagedAssets.filter(a => a.checked).length; }
 
-  // summary totals for active dept
-  get deptTotal():        number { return this.assets.reduce((s, a) => s + a.total, 0); }
-  get deptReady():        number { return this.assets.reduce((s, a) => s + a.readyToDeploy, 0); }
-  get deptDeployed():     number { return this.assets.reduce((s, a) => s + a.deployed, 0); }
-  get deptDeadStock():    number { return this.assets.reduce((s, a) => s + a.deadStock, 0); }
+  get deptTotal(): number { return this.assets.reduce((s, a) => s + a.total, 0); }
+  get deptReady(): number { return this.assets.reduce((s, a) => s + a.readyToDeploy, 0); }
+  get deptDeployed(): number { return this.assets.reduce((s, a) => s + a.deployed, 0); }
+  get deptDeadStock(): number { return this.assets.reduce((s, a) => s + a.deadStock, 0); }
   get deptUnderService(): number { return this.assets.reduce((s, a) => s + a.underService, 0); }
-  get deptDamaged():      number { return this.assets.reduce((s, a) => s + a.damaged, 0); }
+  get deptDamaged(): number { return this.assets.reduce((s, a) => s + a.damaged, 0); }
 
   constructor(private router: Router, private assetService: AssetService) {}
 
-  ngOnInit(): void {
-    this.loadAllReportData();
-  }
-
+  ngOnInit(): void { this.loadAllReportData(); }
   ngOnDestroy(): void {}
 
-  /** Load ALL pages from the server once, then paginate client-side per dept tab */
   private loadAllReportData(): void {
     this.isLoading = true;
-    this.apiError  = null;
+    this.apiError = null;
     this.allAssets = {};
-    this.allPagesLoaded = false;
 
-    // First call to get totalPages
     this.assetService.getAssetStatusSummary(1, PAGE_SIZE).subscribe({
       next: (response: any) => {
-        const data       = response?.responseData?.data ?? {};
+        const data = response?.responseData?.data ?? {};
         const firstBatch = data.assets ?? [];
         const totalPages = data.totalPages ?? 1;
-
         this.mergeIntoAllAssets(firstBatch);
 
         if (totalPages <= 1) {
@@ -112,7 +91,6 @@ export class ReportsComponent implements OnInit, OnDestroy {
           return;
         }
 
-        // Fetch remaining pages in parallel
         const remaining = Array.from({ length: totalPages - 1 }, (_, i) =>
           this.assetService.getAssetStatusSummary(i + 2, PAGE_SIZE)
         );
@@ -125,7 +103,10 @@ export class ReportsComponent implements OnInit, OnDestroy {
               completed++;
               if (completed === remaining.length) this.finaliseData();
             },
-            error: () => { completed++; if (completed === remaining.length) this.finaliseData(); }
+            error: () => {
+              completed++;
+              if (completed === remaining.length) this.finaliseData();
+            }
           });
         });
       },
@@ -142,46 +123,37 @@ export class ReportsComponent implements OnInit, OnDestroy {
       const cat = item.category ?? 'Other';
       if (!this.allAssets[cat]) this.allAssets[cat] = [];
       this.allAssets[cat].push({
-        id:            item.assetTagName ?? `TAG-${index + 1}`,
-        name:          item.assetTagName ?? '—',
-        category:      cat,
-        type:          'Asset',
-        total:         item.totalAssets      ?? 0,
-        readyToDeploy: item.ready            ?? 0,
-        deployed:      item.deployed         ?? 0,
-        deadStock:     item.deadStock        ?? 0,
-        underService:  item.underMaintenance ?? 0,
-        damaged:       item.damaged          ?? 0,
-        checked:       false
+        id: item.assetTagName ?? `TAG-${index + 1}`,
+        name: item.assetTagName ?? '—',
+        category: cat,
+        type: 'Asset',
+        total: item.totalAssets ?? 0,
+        readyToDeploy: item.ready ?? 0,
+        deployed: item.deployed ?? 0,
+        deadStock: item.deadStock ?? 0,
+        underService: item.underMaintenance ?? 0,
+        damaged: item.damaged ?? 0,
+        checked: false
       });
     });
   }
 
   private finaliseData(): void {
-    // Build dept tabs from actual data, merged with known categories
     const fromData = Object.keys(this.allAssets);
-    // Show all known categories as tabs; empty ones will show 0 rows
-    this.departments = [...new Set([...this.allCategories, ...fromData])];
-    if (!this.activeDept || !this.departments.includes(this.activeDept)) {
-      this.activeDept = this.departments[0] ?? '';
-    }
-    this.allPagesLoaded = true;
+    this.departments = [this.allTab, ...new Set([...this.allCategories, ...fromData])];
+    if (!this.departments.includes(this.activeDept)) this.activeDept = this.allTab;
     this.isLoading = false;
   }
 
   @HostListener('document:click')
-  onDocumentClick(): void { this.sidebarOpen = false; this.filterOpen = false; }
+  onDocumentClick(): void { this.sidebarOpen = false; }
 
   selectDept(dept: string): void {
-    this.activeDept  = dept;
+    this.activeDept = dept;
     this.currentPage = 1;
-    this.allChecked  = false;
+    this.allChecked = false;
     this.searchQuery = '';
   }
-
-  toggleFilterPanel(event: Event): void { event.stopPropagation(); this.filterOpen = !this.filterOpen; }
-
-  clearFilters(): void { this.filterTypes = []; this.currentPage = 1; }
 
   exportCSV(): void {
     const headers = ['Asset Tag', 'Category', 'Total', 'Ready to Deploy', 'Deployed', 'Dead Stock', 'Under Service', 'Damaged'];
@@ -194,8 +166,8 @@ export class ReportsComponent implements OnInit, OnDestroy {
 
   private downloadCSV(content: string, filename: string): void {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
     a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
   }
@@ -205,9 +177,9 @@ export class ReportsComponent implements OnInit, OnDestroy {
     this.pagedAssets.forEach(a => a.checked = this.allChecked);
   }
 
-  goToPage(p: number): void { if (p !== this.currentPage) { this.currentPage = p; } }
-  prevPage(): void { if (this.currentPage > 1) { this.currentPage--; } }
-  nextPage(): void { if (this.currentPage < this.totalPages) { this.currentPage++; } }
+  goToPage(p: number): void { if (p !== this.currentPage) this.currentPage = p; }
+  prevPage(): void { if (this.currentPage > 1) this.currentPage--; }
+  nextPage(): void { if (this.currentPage < this.totalPages) this.currentPage++; }
 
   bulkExport(): void {
     const rows = this.pagedAssets.filter(a => a.checked);
@@ -218,21 +190,28 @@ export class ReportsComponent implements OnInit, OnDestroy {
 
   bulkDelete(): void {
     if (confirm(`Delete ${this.selectedCount} item(s)?`)) {
-      this.allAssets[this.activeDept] = this.allAssets[this.activeDept].filter(a => !a.checked);
+      if (this.activeDept === this.allTab) {
+        Object.keys(this.allAssets).forEach(k => this.allAssets[k] = this.allAssets[k].filter(a => !a.checked));
+      } else {
+        this.allAssets[this.activeDept] = (this.allAssets[this.activeDept] ?? []).filter(a => !a.checked);
+      }
       this.allChecked = false;
     }
   }
 
-  clearSelection(): void { this.pagedAssets.forEach(a => a.checked = false); this.allChecked = false; }
+  clearSelection(): void {
+    this.pagedAssets.forEach(a => a.checked = false);
+    this.allChecked = false;
+  }
 
   getTypeClass(type: string): string {
-    const map: Record<string, string> = { 'Asset': 'class-asset', 'Component': 'class-component', 'Consumable': 'class-consumable', 'Accessory': 'class-accessory' };
+    const map: Record<string, string> = { Asset: 'class-asset', Component: 'class-component', Consumable: 'class-consumable', Accessory: 'class-accessory' };
     return map[type] ?? '';
   }
 
-  goToDashboard():  void { this.router.navigate(['/']); }
+  goToDashboard(): void { this.router.navigate(['/']); }
   goToViewAssets(): void { this.router.navigate(['/assets/view']); }
   goToIssueAsset(): void { this.router.navigate(['/assets/issue']); }
-  goToIssueLog():   void { this.router.navigate(['/assets/issue-log']); }
-  goToReturnLog():  void { this.router.navigate(['/assets/return-log']); }
+  goToIssueLog(): void { this.router.navigate(['/assets/issue-log']); }
+  goToReturnLog(): void { this.router.navigate(['/assets/return-log']); }
 }

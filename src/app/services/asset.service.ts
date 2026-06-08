@@ -17,7 +17,50 @@ export class AssetService {
   }
 
   /** GET /assets?page=X&size=Y */
-  getAssets(page: number = 1, size: number = 10) {
+  getAssets(filters: {
+    page?: number;
+    pageSize?: number;
+    assetName?: string;
+    assetTagName?: string;
+    categoryId?: string;
+    locationId?: string;
+    statusId?: string;
+    purchaseDateFrom?: string;
+    purchaseDateTo?: string;
+  } = {}) {
+    let params = new HttpParams()
+      .set('page', (filters.page ?? 1).toString())
+      .set('pageSize', (filters.pageSize ?? 10).toString());
+    if (filters.assetName) params = params.set('assetName', filters.assetName);
+    if (filters.assetTagName) params = params.set('assetTagName', filters.assetTagName);
+    if (filters.categoryId) params = params.set('categoryId', filters.categoryId);
+    if (filters.locationId) params = params.set('locationId', filters.locationId);
+    if (filters.statusId) params = params.set('statusId', filters.statusId);
+    if (filters.purchaseDateFrom) params = params.set('purchaseDateFrom', filters.purchaseDateFrom);
+    if (filters.purchaseDateTo) params = params.set('purchaseDateTo', filters.purchaseDateTo);
+    return this.http.get<any>(`${this.baseUrl}/assets`, { params });
+  }
+
+  /** GET /assets-search?q=query */
+  searchAssets(query: string) {
+    const params = new HttpParams().set('q', query);
+    return this.http.get<any>(`${this.baseUrl}/assets-search`, { params });
+  }
+
+  getCategories() {
+    return this.http.get<any>(`${this.baseUrl}/categories`);
+  }
+
+  getLocations() {
+    return this.http.get<any>(`${this.baseUrl}/locations-list`);
+  }
+
+  getStatuses() {
+    return this.http.get<any>(`${this.baseUrl}/statuses-list`);
+  }
+
+  /** legacy helper */
+  getAssetsLegacy(page: number = 1, size: number = 10) {
     const params = new HttpParams().set('page', page.toString()).set('size', size.toString());
     return this.http.get<any>(`${this.baseUrl}/assets`, { params });
   }
@@ -37,15 +80,65 @@ export class AssetService {
     return this.http.get<any>(`${this.baseUrl}/categories`, { params });
   }
 
-  /** GET /issued-assets?page=X&size=Y */
-  getIssuedAssets(page: number = 1, size: number = 10) {
-    const params = new HttpParams().set('page', page.toString()).set('size', size.toString());
+  /** GET /issued-assets?page=X&pageSize=Y */
+  getIssuedAssets(filters: {
+    page?: number;
+    pageSize?: number;
+    assetName?: string;
+    category?: string;
+    issuedTo?: string;
+    type?: string;
+    issueDate?: string;
+  } = {}) {
+    let params = new HttpParams()
+      .set('page', (filters.page ?? 1).toString())
+      .set('pageSize', (filters.pageSize ?? 10).toString());
+    if (filters.assetName) params = params.set('assetName', filters.assetName);
+    if (filters.category) params = params.set('category', filters.category);
+    if (filters.issuedTo) params = params.set('issuedTo', filters.issuedTo);
+    if (filters.type) params = params.set('type', filters.type);
+    if (filters.issueDate) params = params.set('issueDate', filters.issueDate);
     return this.http.get<any>(`${this.baseUrl}/issued-assets`, { params });
   }
 
-  /** GET /return-logs?page=X&size=Y */
-  getReturnLogs(page: number = 1, size: number = 10) {
-    const params = new HttpParams().set('page', page.toString()).set('size', size.toString());
+  /** POST /issue-asset */
+  createIssueAsset(payload: {
+    assetId: string;
+    issueDate?: string;
+    locationId?: string | null;
+    personId?: string | null;
+    issuedToAssetId?: string | null;
+  }) {
+    return this.http.post<any>(`${this.baseUrl}/issue-asset`, payload);
+  }
+
+  /** GET /return-logs?page=X&pageSize=Y */
+  getReturnLogs(
+    pageOrFilters: number | {
+      page?: number;
+      pageSize?: number;
+      name?: string;
+      classification?: string;
+      total?: string;
+      returnType?: string;
+      returnTo?: string;
+      returnDate?: string;
+    } = 1,
+    size: number = 10
+  ) {
+    const filters = typeof pageOrFilters === 'number'
+      ? { page: pageOrFilters, pageSize: size }
+      : pageOrFilters;
+
+    let params = new HttpParams()
+      .set('page', (filters.page ?? 1).toString())
+      .set('pageSize', (filters.pageSize ?? 10).toString());
+    if (filters.name) params = params.set('name', filters.name);
+    if (filters.classification) params = params.set('classification', filters.classification);
+    if (filters.total) params = params.set('total', filters.total);
+    if (filters.returnType) params = params.set('returnType', filters.returnType);
+    if (filters.returnTo) params = params.set('returnTo', filters.returnTo);
+    if (filters.returnDate) params = params.set('returnDate', filters.returnDate);
     return this.http.get<any>(`${this.baseUrl}/return-logs`, { params });
   }
 
