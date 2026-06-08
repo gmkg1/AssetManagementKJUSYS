@@ -5,7 +5,13 @@ C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\AssetGroupingHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\AssetsHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\AssetsSearchHandler.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\CreateAssetHandler.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\CreateAssetTagHandler.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\EditAssetHandler.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetAssetDetailsHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetAssetsStatusSummary.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetAssetTagsListHandler.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetCategoriesListHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetCategoryCountHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetLocationsListHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetStatusCountHandler.java

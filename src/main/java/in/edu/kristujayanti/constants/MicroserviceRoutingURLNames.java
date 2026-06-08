@@ -23,4 +23,11 @@ public interface MicroserviceRoutingURLNames {
     String STATUS = "/status";
     String LOCATIONSLIST = "/locations-list";
     String STATUSESLIST = "/statuses-list";
+
+    String CREATE_ASSET = "/create-asset";
+    String CREATE_ASSET_TAG = "/create-asset-tag";
+    String EDIT_ASSET = "/edit-asset";
+    String ASSET_DETAILS = "/asset-details";
+    String ASSET_TAGS_LIST = "/asset-tags-list";
+    String CATEGORIES_LIST = "/categories-list";
 }

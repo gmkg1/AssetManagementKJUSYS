@@ -3,6 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AssetService } from '../../services/asset.service';
 
 export interface Asset {
+  dbId?: string;
   id: string;
   name: string;
   department: string;
@@ -211,6 +212,7 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
 
   private mapToAsset(item: any, index: number): Asset {
     return {
+      dbId: item._id,
       id: item.assetSerialNumber ?? `AST-${String(index + 1).padStart(3, '0')}`,
       name: item.assetName ?? '—',
       department: item.location ?? '—',
@@ -244,6 +246,14 @@ export class ViewAssetsComponent implements OnInit, OnDestroy {
   goToReports(): void { this.router.navigate(['/assets/reports']); }
   issueAsset(asset: Asset): void {
     this.router.navigate(['/assets/issue'], { queryParams: { assetId: asset.id, assetName: asset.name, assetTag: asset.assetTag, assetModel: asset.model, assetCategory: asset.category } });
+  }
+  goToCreateAsset(): void {
+    this.router.navigate(['/assets/create']);
+  }
+  editAsset(asset: Asset): void {
+    if (asset.dbId) {
+      this.router.navigate([`/assets/edit/${asset.dbId}`]);
+    }
   }
 
   getStatusClass(status: string): string {

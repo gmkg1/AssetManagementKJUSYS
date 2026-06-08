@@ -14,6 +14,9 @@ const routes: Routes = [
   { path: 'assets/issue-log',  component: IssueLogComponent },
   { path: 'assets/return-log', component: ReturnLogComponent },
   { path: 'assets/reports',    component: ReportsComponent },
+  { path: 'assets/create',     loadChildren: () => import('./asset-management/create-asset/create-asset.module').then(m => m.CreateAssetModule) },
+  { path: 'assets/create-tag', loadChildren: () => import('./asset-management/create-asset-tag/create-asset-tag.module').then(m => m.CreateAssetTagModule) },
+  { path: 'assets/edit/:id',   loadChildren: () => import('./asset-management/edit-asset/edit-asset.module').then(m => m.EditAssetModule) },
   { path: '**',                redirectTo: '' },
 ];
 

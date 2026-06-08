@@ -1463,6 +1463,7 @@ public class AssetsService {
                 .put("unitOfMeasureId", objectIdToString(asset.getObjectId("unitOfMeasureId")))
                 .put("campusId", objectIdToString(asset.getObjectId("campusId")))
                 .put("blockId", asset.getString("blockId"))
+                .put("statusId", objectIdToString(asset.getObjectId("statusId")))
                 .put("locationId", objectIdToString(asset.getObjectId("locationId")));
     }
 
@@ -1488,5 +1489,215 @@ public class AssetsService {
       return Date.from(java.time.LocalDate.parse(value.trim())
         .atStartOfDay(java.time.ZoneId.systemDefault())
         .toInstant());
+    }
+
+    public JsonObject createAsset(JsonObject payload) {
+      LOGGER.info("Creating new asset record");
+      if (payload == null) {
+        throw new IllegalArgumentException("Request body is required");
+      }
+
+      String assetName = payload.getString("assetName");
+      String assetTagId = payload.getString("assetTagId");
+      String statusId = payload.getString("statusId");
+      String defaultLocation = payload.getString("defaultLocation");
+      String serial = payload.getString("serial");
+      String purchaseCost = payload.getString("purchaseCost");
+      String purchaseDate = payload.getString("purchaseDate");
+      boolean isReturnable = payload.getBoolean("isReturnable", true);
+
+      if (assetName == null || assetName.isBlank()) {
+        throw new IllegalArgumentException("assetName is required");
+      }
+      if (assetTagId == null || assetTagId.isBlank()) {
+        throw new IllegalArgumentException("assetTagId is required");
+      }
+      if (statusId == null || statusId.isBlank()) {
+        throw new IllegalArgumentException("statusId is required");
+      }
+
+      ObjectId campusId = null;
+      try {
+        MongoCollection<Document> campusColl = mongoDatabase.getCollection("campuses");
+        Document firstCampus = campusColl.find().first();
+        if (firstCampus != null) {
+          campusId = firstCampus.getObjectId("_id");
+        } else {
+          campusId = new ObjectId("6a101a50df52662f6e441530");
+        }
+      } catch (Exception e) {
+        campusId = new ObjectId("6a101a50df52662f6e441530");
+      }
+
+      ObjectId unitOfMeasureId = new ObjectId("6a1533d11fcf30c131441533");
+
+      int costVal = 0;
+      if (purchaseCost != null && !purchaseCost.isBlank()) {
+        try {
+          costVal = Integer.parseInt(purchaseCost.trim());
+        } catch (NumberFormatException ignored) {}
+      }
+
+      Date dateVal = new Date();
+      if (purchaseDate != null && !purchaseDate.isBlank()) {
+        try {
+          dateVal = Date.from(java.time.LocalDate.parse(purchaseDate.trim())
+            .atStartOfDay(java.time.ZoneId.systemDefault())
+            .toInstant());
+        } catch (Exception ignored) {}
+      }
+
+      Document assetDocument = new Document("assetName", assetName.trim())
+        .append("assetTagId", new ObjectId(assetTagId.trim()))
+        .append("statusId", new ObjectId(statusId.trim()))
+        .append("locationId", toObjectIdOrNull(defaultLocation))
+        .append("assetSerialNumber", serial != null ? serial.trim() : "")
+        .append("purchaseCost", costVal)
+        .append("purchaseDate", dateVal)
+        .append("isIssuable", isReturnable)
+        .append("quantity", 1)
+        .append("campusId", campusId)
+        .append("blockId", "B002")
+        .append("unitOfMeasureId", unitOfMeasureId);
+
+      MongoCollection<Document> collection = mongoDatabase.getCollection(ASSETS_COLLECTION);
+      collection.insertOne(assetDocument);
+
+      return new JsonObject()
+        .put("message", "Asset created successfully")
+        .put("_id", objectIdToString(assetDocument.getObjectId("_id")));
+    }
+
+    public JsonObject createAssetTag(JsonObject payload) {
+      LOGGER.info("Creating new asset tag");
+      if (payload == null) {
+        throw new IllegalArgumentException("Request body is required");
+      }
+
+      String assetTagName = payload.getString("assetTagName");
+      if (assetTagName == null || assetTagName.isBlank()) {
+        assetTagName = payload.getString("assetTypeName");
+      }
+
+      String categoryId = payload.getString("category");
+
+      if (assetTagName == null || assetTagName.isBlank()) {
+        throw new IllegalArgumentException("assetTagName is required");
+      }
+      if (categoryId == null || categoryId.isBlank()) {
+        throw new IllegalArgumentException("category (categoryId) is required");
+      }
+
+      ObjectId classificationId = null;
+      try {
+        MongoCollection<Document> classColl = mongoDatabase.getCollection("classifications");
+        Document firstClass = classColl.find().first();
+        if (firstClass != null) {
+          classificationId = firstClass.getObjectId("_id");
+        } else {
+          classificationId = new ObjectId("6a155f01b2f64aac2344152e");
+        }
+      } catch (Exception e) {
+        classificationId = new ObjectId("6a155f01b2f64aac2344152e");
+      }
+
+      Document tagDocument = new Document("assetTagName", assetTagName.trim())
+        .append("categoryId", new ObjectId(categoryId.trim()))
+        .append("classificationId", classificationId);
+
+      MongoCollection<Document> collection = mongoDatabase.getCollection("assettags");
+      collection.insertOne(tagDocument);
+
+      return new JsonObject()
+        .put("message", "Asset tag created successfully")
+        .put("_id", objectIdToString(tagDocument.getObjectId("_id")));
+    }
+
+    public JsonObject editAsset(JsonObject payload) {
+      LOGGER.info("Editing asset record");
+      if (payload == null) {
+        throw new IllegalArgumentException("Request body is required");
+      }
+
+      String id = payload.getString("_id");
+      if (id == null || id.isBlank()) {
+        throw new IllegalArgumentException("_id is required");
+      }
+
+      String assetName = payload.getString("assetName");
+      String assetTagId = payload.getString("assetTagId");
+      String statusId = payload.getString("statusId");
+      String defaultLocation = payload.getString("defaultLocation");
+      String serial = payload.getString("serial");
+      String purchaseCost = payload.getString("purchaseCost");
+      String purchaseDate = payload.getString("purchaseDate");
+      boolean isReturnable = payload.getBoolean("isReturnable", true);
+
+      Document updateFields = new Document();
+      if (assetName != null) updateFields.append("assetName", assetName.trim());
+      if (assetTagId != null) updateFields.append("assetTagId", new ObjectId(assetTagId.trim()));
+      if (statusId != null) updateFields.append("statusId", new ObjectId(statusId.trim()));
+      if (defaultLocation != null) updateFields.append("locationId", toObjectIdOrNull(defaultLocation));
+      if (serial != null) updateFields.append("assetSerialNumber", serial.trim());
+      updateFields.append("isIssuable", isReturnable);
+
+      if (purchaseCost != null) {
+        int costVal = 0;
+        try { costVal = Integer.parseInt(purchaseCost.trim()); } catch (NumberFormatException ignored) {}
+        updateFields.append("purchaseCost", costVal);
+      }
+
+      if (purchaseDate != null) {
+        Date dateVal = new Date();
+        try {
+          dateVal = Date.from(java.time.LocalDate.parse(purchaseDate.trim())
+            .atStartOfDay(java.time.ZoneId.systemDefault())
+            .toInstant());
+        } catch (Exception ignored) {}
+        updateFields.append("purchaseDate", dateVal);
+      }
+
+      MongoCollection<Document> collection = mongoDatabase.getCollection(ASSETS_COLLECTION);
+      collection.updateOne(new Document("_id", new ObjectId(id.trim())), new Document("$set", updateFields));
+
+      return new JsonObject().put("message", "Asset updated successfully");
+    }
+
+    public JsonObject getAssetById(String id) {
+      LOGGER.info("Fetching asset details for id: {}", id);
+      if (id == null || id.isBlank()) {
+        throw new IllegalArgumentException("id is required");
+      }
+
+      MongoCollection<Document> collection = mongoDatabase.getCollection(ASSETS_COLLECTION);
+      Document doc = collection.find(new Document("_id", new ObjectId(id.trim()))).first();
+      if (doc == null) {
+        return null;
+      }
+      return toJson(doc);
+    }
+
+    public JsonArray getDistinctAssetTags() {
+      LOGGER.info("Fetching all asset tags");
+      JsonArray result = new JsonArray();
+      MongoCollection<Document> collection = mongoDatabase.getCollection("assettags");
+      for (Document doc : collection.find()) {
+        result.add(new JsonObject()
+          .put("id", objectIdToString(doc.getObjectId("_id")))
+          .put("assetTagName", doc.getString("assetTagName")));
+      }
+      return result;
+    }
+
+    public JsonArray getDistinctCategories() {
+      LOGGER.info("Fetching all categories");
+      JsonArray result = new JsonArray();
+      MongoCollection<Document> collection = mongoDatabase.getCollection("categories");
+      for (Document doc : collection.find()) {
+        result.add(new JsonObject()
+          .put("categoryId", objectIdToString(doc.getObjectId("_id")))
+          .put("categoryName", doc.getString("categoryName")));
+      }
+      return result;
     }
 }

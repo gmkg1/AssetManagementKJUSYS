@@ -138,6 +138,38 @@ public class MicroserviceRouter extends RouterBase {
       MicroserviceRoutingURLNames.STATUSESLIST,
       new GetStatusesListHandler(assetsService)
     );
+
+    // New CRUD APIs for assets and tags
+    addRoute(
+      HttpMethod.POST,
+      MicroserviceRoutingURLNames.CREATE_ASSET,
+      new CreateAssetHandler(assetsService)
+    );
+    addRoute(
+      HttpMethod.POST,
+      MicroserviceRoutingURLNames.CREATE_ASSET_TAG,
+      new CreateAssetTagHandler(assetsService)
+    );
+    addRoute(
+      HttpMethod.PUT,
+      MicroserviceRoutingURLNames.EDIT_ASSET,
+      new EditAssetHandler(assetsService)
+    );
+    addRoute(
+      HttpMethod.GET,
+      MicroserviceRoutingURLNames.ASSET_DETAILS,
+      new GetAssetDetailsHandler(assetsService)
+    );
+    addRoute(
+      HttpMethod.GET,
+      MicroserviceRoutingURLNames.ASSET_TAGS_LIST,
+      new GetAssetTagsListHandler(assetsService)
+    );
+    addRoute(
+      HttpMethod.GET,
+      MicroserviceRoutingURLNames.CATEGORIES_LIST,
+      new GetCategoriesListHandler(assetsService)
+    );
   }
 
   /**
