@@ -821,6 +821,12 @@ public class AssetsService {
         json.put("receiverType", "Person");
       }
 
+      json.put("_id", objectIdToString(issueDoc.getObjectId("_id")));
+      json.put("assetId", objectIdToString(issueDoc.getObjectId("assetId")));
+      json.put("locationId", objectIdToString(issueDoc.getObjectId("locationId")));
+      json.put("personId", objectIdToString(issueDoc.getObjectId("personId")));
+      json.put("issuedToAssetId", objectIdToString(issueDoc.getObjectId("issuedToAssetId")));
+
       result.add(json);
     }
 
@@ -1687,6 +1693,55 @@ public class AssetsService {
           .put("assetTagName", doc.getString("assetTagName")));
       }
       return result;
+    }
+
+    public JsonObject createReturnAsset(JsonObject payload) {
+      LOGGER.info("Creating returned asset record");
+
+      if (payload == null) {
+        throw new IllegalArgumentException("Request body is required");
+      }
+
+      String assetId = payload.getString("assetId");
+      String issuetoId = payload.getString("issuetoId");
+      String returnDate = payload.getString("returnDate");
+      String locationId = payload.getString("locationId");
+      String personId = payload.getString("personId");
+      String returnedToAssetId = payload.getString("returnedToAssetId");
+      String notes = payload.getString("notes");
+
+      if (assetId == null || assetId.isBlank()) {
+        throw new IllegalArgumentException("assetId is required");
+      }
+      if (issuetoId == null || issuetoId.isBlank()) {
+        throw new IllegalArgumentException("issuetoId is required");
+      }
+
+      Document returnDocument = new Document("assetId", new ObjectId(assetId.trim()))
+        .append("issuetoId", new ObjectId(issuetoId.trim()))
+        .append("returnDate", parseIssueDate(returnDate))
+        .append("locationId", toObjectIdOrNull(locationId))
+        .append("personId", toObjectIdOrNull(personId))
+        .append("returnedToAssetId", toObjectIdOrNull(returnedToAssetId));
+
+      if (notes != null) {
+        returnDocument.append("notes", notes.trim());
+      }
+
+      MongoCollection<Document> collection =
+        mongoDatabase.getCollection("returnto");
+
+      collection.insertOne(returnDocument);
+
+      return new JsonObject()
+        .put("message", "Asset returned successfully")
+        .put("returnId", objectIdToString(returnDocument.getObjectId("_id")))
+        .put("assetId", assetId.trim())
+        .put("issuetoId", issuetoId.trim())
+        .put("returnDate", dateToString(returnDocument.getDate("returnDate")))
+        .put("locationId", objectIdToString(returnDocument.getObjectId("locationId")))
+        .put("personId", objectIdToString(returnDocument.getObjectId("personId")))
+        .put("returnedToAssetId", objectIdToString(returnDocument.getObjectId("returnedToAssetId")));
     }
 
     public JsonArray getDistinctCategories() {

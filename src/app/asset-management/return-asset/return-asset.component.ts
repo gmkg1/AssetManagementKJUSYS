@@ -1,9 +1,17 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { AssetService } from '../../services/asset.service';
 
 interface IssueOption {
   value: string;
   label: string;
+  assetId: string;
+  assetName: string;
+  receiverType: string;
+  receiverName: string;
+  locationId: string | null;
+  personId: string | null;
+  issuedToAssetId: string | null;
 }
 
 interface ModuleTab {
@@ -17,14 +25,15 @@ interface ModuleTab {
   templateUrl: './return-asset.component.html',
   styleUrls: ['./return-asset.component.css']
 })
-export class ReturnAssetComponent {
+export class ReturnAssetComponent implements OnInit {
   public issueDropdownOpen = false;
   public selectedIssueId = '';
-  public issueIdOptions: IssueOption[] = [
-    { value: 'ISS-001', label: 'ISS-001 — MacBook Pro' },
-    { value: 'ISS-002', label: 'ISS-002 — HP Printer' },
-    { value: 'ISS-003', label: 'ISS-003 — BenQ Projector' }
-  ];
+  public issueIdOptions: IssueOption[] = [];
+
+  public selectedAssetId = '';
+  public selectedLocationId: string | null = null;
+  public selectedPersonId: string | null = null;
+  public selectedReturnedToAssetId: string | null = null;
 
   public assetName = '';
   public returnType = '';
@@ -43,7 +52,34 @@ export class ReturnAssetComponent {
     { id: 'reports', label: 'Reports', subtitle: 'Asset analytics' }
   ];
 
-  constructor(public router: Router) {}
+  constructor(public router: Router, private assetService: AssetService) {}
+
+  ngOnInit(): void {
+    this.returnDate = new Date().toISOString().slice(0, 10);
+    this.loadIssuedAssetsOptions();
+  }
+
+  private loadIssuedAssetsOptions(): void {
+    this.assetService.getIssuedAssets({ page: 1, pageSize: 1000 }).subscribe({
+      next: (response: any) => {
+        const raw: any[] = response?.responseData?.data?.assets ?? [];
+        this.issueIdOptions = raw.map(item => ({
+          value: item._id,
+          label: `${item._id} — ${item.assetName} (issued to ${item.receiverName})`,
+          assetId: item.assetId,
+          assetName: item.assetName,
+          receiverType: item.receiverType,
+          receiverName: item.receiverName,
+          locationId: item.locationId,
+          personId: item.personId,
+          issuedToAssetId: item.issuedToAssetId
+        }));
+      },
+      error: (err) => {
+        console.error('Failed to load issued assets:', err);
+      }
+    });
+  }
 
   toggleIssueDropdown(): void {
     this.issueDropdownOpen = !this.issueDropdownOpen;
@@ -58,7 +94,12 @@ export class ReturnAssetComponent {
 
   onIssueSelect(option: IssueOption): void {
     this.selectedIssueId = option.value;
-    this.assetName = option.label.split('—')[1]?.trim() ?? '';
+    this.assetName = option.assetName;
+    this.returnType = option.receiverType;
+    this.selectedAssetId = option.assetId;
+    this.selectedLocationId = option.locationId;
+    this.selectedPersonId = option.personId;
+    this.selectedReturnedToAssetId = option.issuedToAssetId;
     this.issueDropdownOpen = false;
   }
 
@@ -72,13 +113,31 @@ export class ReturnAssetComponent {
   }
 
   onReturnAsset(): void {
-    // This is a placeholder implementation. Replace with real return logic later.
     if (!this.selectedIssueId) {
       alert('Please select an issue ID before returning the asset.');
       return;
     }
 
-    this.router.navigate(['/kjusys/return-log']);
+    const payload = {
+      issuetoId: this.selectedIssueId,
+      assetId: this.selectedAssetId,
+      returnDate: this.returnDate,
+      locationId: this.selectedLocationId,
+      personId: this.selectedPersonId,
+      returnedToAssetId: this.selectedReturnedToAssetId,
+      notes: this.notes
+    };
+
+    this.assetService.createReturnAsset(payload).subscribe({
+      next: () => {
+        alert('Asset returned successfully!');
+        this.router.navigate(['/kjusys/return-log']);
+      },
+      error: (err: any) => {
+        console.error('Failed to return asset:', err);
+        alert(err?.error?.responseData?.error ?? 'Could not return asset.');
+      }
+    });
   }
 
   onModuleTabChange(tabId: string): void {

@@ -7,6 +7,7 @@ in\edu\kristujayanti\router\SubRouterBuilderBase.class
 in\edu\kristujayanti\router\SubRouterBuilders.class
 in\edu\kristujayanti\handlers\GetAssetDetailsHandler.class
 in\edu\kristujayanti\handlers\CreateAssetTagHandler.class
+in\edu\kristujayanti\handlers\ReturnAssetCreateHandler.class
 in\edu\kristujayanti\handlers\GetStatusesListHandler.class
 in\edu\kristujayanti\router\RouterBase.class
 in\edu\kristujayanti\router\RouterBuilderService.class

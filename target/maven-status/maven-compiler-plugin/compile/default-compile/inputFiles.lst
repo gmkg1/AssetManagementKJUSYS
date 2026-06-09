@@ -19,6 +19,7 @@ C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\HealthHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\IssueAssetCreateHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\IssuedAssetsHandler.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\ReturnAssetCreateHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\ReturnLogHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\MicroserviceStarter.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\router\MicroserviceRouter.java

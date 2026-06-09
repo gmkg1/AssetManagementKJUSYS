@@ -108,6 +108,11 @@ public class MicroserviceRouter extends RouterBase {
       new IssueAssetCreateHandler(assetsService)
     );
     addRoute(
+      HttpMethod.POST,
+      MicroserviceRoutingURLNames.RETURN_ASSET,
+      new ReturnAssetCreateHandler(assetsService)
+    );
+    addRoute(
       HttpMethod.GET,
       MicroserviceRoutingURLNames.ASSETSTATUSSUMMARY,
       new GetAssetsStatusSummary(assetsService)
