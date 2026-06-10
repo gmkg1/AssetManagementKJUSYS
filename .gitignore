@@ -48,3 +48,6 @@ uploads/
 setup.sh
 
 setup.sh
+.angular/
+node_modules/
+target/
