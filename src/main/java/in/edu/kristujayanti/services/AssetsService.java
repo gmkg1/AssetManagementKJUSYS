@@ -84,7 +84,10 @@ public class AssetsService {
         .append("issueDate", parseIssueDate(issueDate))
         .append("locationId", toObjectIdOrNull(locationId))
         .append("personId", toObjectIdOrNull(personId))
-        .append("issuedToAssetId", toObjectIdOrNull(issuedToAssetId));
+        .append("issuedToAssetId", toObjectIdOrNull(issuedToAssetId))
+        .append("ActiveStatus", true)
+        .append("returnStatus", false)
+        .append("returnDate", null);
 
       MongoCollection<Document> collection =
         mongoDatabase.getCollection("issueto");
@@ -206,8 +209,15 @@ public class AssetsService {
       pipeline.add(
         new Document("$lookup",
           new Document("from", "issueto")
-            .append("localField", "_id")
-            .append("foreignField", "assetId")
+            .append("let", new Document("asset_id", "$_id"))
+            .append("pipeline", List.of(
+              new Document("$match", new Document("$expr",
+                new Document("$and", List.of(
+                  new Document("$eq", List.of("$assetId", "$$asset_id")),
+                  new Document("$ne", List.of("$returnStatus", true))
+                ))
+              ))
+            ))
             .append("as", "issueInfo"))
       );
 
@@ -366,12 +376,23 @@ public class AssetsService {
             // =========================
             // BASIC DETAILS
             // =========================
+            json.put("_id", objectIdToString(doc.getObjectId("_id")));
             json.put("assetName",
               doc.getString("assetName"));
+            json.put("assetSerialNumber", doc.getString("assetSerialNumber"));
+            json.put("purchaseCost", doc.getInteger("purchaseCost"));
+            json.put("purchaseDate", dateToString(doc.getDate("purchaseDate")));
+            json.put("isIssuable", doc.getBoolean("isIssuable"));
+            json.put("quantity", doc.getInteger("quantity"));
 
-            json.put("model",
-              ((Document) doc.get("assetTag"))
-                .getString("assetTagName"));
+            String tagLabel = "N/A";
+            Document tagDoc = (Document) doc.get("assetTag");
+            if (tagDoc != null) {
+              tagLabel = tagDoc.getString("assetTagName");
+            }
+            json.put("assetTagName", tagLabel);
+
+            json.put("model", tagLabel);
 
             json.put("category",
               ((Document) doc.get("category"))
@@ -709,6 +730,7 @@ public class AssetsService {
               .append("default", "")))));
 
     List<Document> matchConditions = new ArrayList<>();
+    matchConditions.add(new Document("returnStatus", new Document("$ne", true)));
 
     if (assetName != null && !assetName.isBlank()) {
       matchConditions.add(new Document("assetName",
@@ -1238,9 +1260,11 @@ public class AssetsService {
     int skip = (page - 1) * pageSize;
 
     MongoCollection<Document> returnCollection =
-      mongoDatabase.getCollection("returnto");
+      mongoDatabase.getCollection("issueto");
 
     List<Document> pipeline = new ArrayList<>();
+
+    pipeline.add(new Document("$match", new Document("returnStatus", true)));
 
     pipeline.add(new Document("$lookup",
       new Document("from", "assets")
@@ -1284,7 +1308,7 @@ public class AssetsService {
 
     pipeline.add(new Document("$lookup",
       new Document("from", "assets")
-        .append("localField", "returnedToAssetId")
+        .append("localField", "issuedToAssetId")
         .append("foreignField", "_id")
         .append("as", "returnedAsset")));
 
@@ -1299,14 +1323,14 @@ public class AssetsService {
         .append("returnType", new Document("$switch",
           new Document("branches", Arrays.asList(
             new Document("case", new Document("$ne", Arrays.asList("$locationId", null))).append("then", "Location"),
-            new Document("case", new Document("$ne", Arrays.asList("$returnedToAssetId", null))).append("then", "Asset"),
+            new Document("case", new Document("$ne", Arrays.asList("$issuedToAssetId", null))).append("then", "Asset"),
             new Document("case", new Document("$ne", Arrays.asList("$personId", null))).append("then", "Person")
           )).append("default", "Unknown")))
         .append("returnTo", new Document("$switch",
           new Document("branches", Arrays.asList(
             new Document("case", new Document("$ne", Arrays.asList("$locationId", null)))
               .append("then", new Document("$ifNull", Arrays.asList("$location.locationName", ""))),
-            new Document("case", new Document("$ne", Arrays.asList("$returnedToAssetId", null)))
+            new Document("case", new Document("$ne", Arrays.asList("$issuedToAssetId", null)))
               .append("then", new Document("$ifNull", Arrays.asList("$returnedAsset.assetName", ""))),
             new Document("case", new Document("$ne", Arrays.asList("$personId", null)))
               .append("then", new Document("$toString", "$personId"))
@@ -1457,6 +1481,18 @@ public class AssetsService {
   }
 
   private JsonObject toJson(Document asset) {
+        ObjectId assetTagId = asset.getObjectId("assetTagId");
+        String categoryId = null;
+        if (assetTagId != null) {
+          try {
+            Document tagDoc = mongoDatabase.getCollection("assettags")
+              .find(new Document("_id", assetTagId)).first();
+            if (tagDoc != null) {
+              categoryId = objectIdToString(tagDoc.getObjectId("categoryId"));
+            }
+          } catch (Exception ignored) {}
+        }
+
         return new JsonObject()
                 .put("_id", objectIdToString(asset.getObjectId("_id")))
                 .put("purchaseCost", asset.getInteger("purchaseCost"))
@@ -1464,7 +1500,8 @@ public class AssetsService {
                 .put("assetSerialNumber", asset.getString("assetSerialNumber"))
                 .put("isIssuable", asset.getBoolean("isIssuable"))
                 .put("assetName", asset.getString("assetName"))
-                .put("assetTagId", objectIdToString(asset.getObjectId("assetTagId")))
+                .put("assetTagId", objectIdToString(assetTagId))
+                .put("categoryId", categoryId)
                 .put("quantity", asset.getInteger("quantity"))
                 .put("unitOfMeasureId", objectIdToString(asset.getObjectId("unitOfMeasureId")))
                 .put("campusId", objectIdToString(asset.getObjectId("campusId")))
@@ -1690,13 +1727,14 @@ public class AssetsService {
       for (Document doc : collection.find()) {
         result.add(new JsonObject()
           .put("id", objectIdToString(doc.getObjectId("_id")))
-          .put("assetTagName", doc.getString("assetTagName")));
+          .put("assetTagName", doc.getString("assetTagName"))
+          .put("categoryId", objectIdToString(doc.getObjectId("categoryId"))));
       }
       return result;
     }
 
     public JsonObject createReturnAsset(JsonObject payload) {
-      LOGGER.info("Creating returned asset record");
+      LOGGER.info("Processing returned asset record");
 
       if (payload == null) {
         throw new IllegalArgumentException("Request body is required");
@@ -1705,9 +1743,6 @@ public class AssetsService {
       String assetId = payload.getString("assetId");
       String issuetoId = payload.getString("issuetoId");
       String returnDate = payload.getString("returnDate");
-      String locationId = payload.getString("locationId");
-      String personId = payload.getString("personId");
-      String returnedToAssetId = payload.getString("returnedToAssetId");
       String notes = payload.getString("notes");
 
       if (assetId == null || assetId.isBlank()) {
@@ -1717,31 +1752,37 @@ public class AssetsService {
         throw new IllegalArgumentException("issuetoId is required");
       }
 
-      Document returnDocument = new Document("assetId", new ObjectId(assetId.trim()))
-        .append("issuetoId", new ObjectId(issuetoId.trim()))
-        .append("returnDate", parseIssueDate(returnDate))
-        .append("locationId", toObjectIdOrNull(locationId))
-        .append("personId", toObjectIdOrNull(personId))
-        .append("returnedToAssetId", toObjectIdOrNull(returnedToAssetId));
+      MongoCollection<Document> collection =
+        mongoDatabase.getCollection("issueto");
 
-      if (notes != null) {
-        returnDocument.append("notes", notes.trim());
+      ObjectId issueObjectId = new ObjectId(issuetoId.trim());
+      Document originalIssue = collection.find(new Document("_id", issueObjectId)).first();
+      if (originalIssue == null) {
+        throw new IllegalArgumentException("Issue record not found with id: " + issuetoId);
       }
 
-      MongoCollection<Document> collection =
-        mongoDatabase.getCollection("returnto");
+      Date returnDateVal = parseIssueDate(returnDate);
 
-      collection.insertOne(returnDocument);
+      Document updateFields = new Document()
+        .append("ActiveStatus", false)
+        .append("returnStatus", true)
+        .append("returnDate", returnDateVal);
+
+      if (notes != null) {
+        updateFields.append("notes", notes.trim());
+      }
+
+      collection.updateOne(new Document("_id", issueObjectId), new Document("$set", updateFields));
 
       return new JsonObject()
         .put("message", "Asset returned successfully")
-        .put("returnId", objectIdToString(returnDocument.getObjectId("_id")))
+        .put("returnId", issuetoId.trim())
         .put("assetId", assetId.trim())
         .put("issuetoId", issuetoId.trim())
-        .put("returnDate", dateToString(returnDocument.getDate("returnDate")))
-        .put("locationId", objectIdToString(returnDocument.getObjectId("locationId")))
-        .put("personId", objectIdToString(returnDocument.getObjectId("personId")))
-        .put("returnedToAssetId", objectIdToString(returnDocument.getObjectId("returnedToAssetId")));
+        .put("returnDate", dateToString(returnDateVal))
+        .put("locationId", objectIdToString(originalIssue.getObjectId("locationId")))
+        .put("personId", objectIdToString(originalIssue.getObjectId("personId")))
+        .put("issuedToAssetId", objectIdToString(originalIssue.getObjectId("issuedToAssetId")));
     }
 
     public JsonArray getDistinctCategories() {
