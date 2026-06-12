@@ -31,4 +31,6 @@ public interface MicroserviceRoutingURLNames {
     String ASSET_DETAILS = "/asset-details";
     String ASSET_TAGS_LIST = "/asset-tags-list";
     String CATEGORIES_LIST = "/categories-list";
+    String GET_LICENSES = "/get-licenses/:assetId";
+    String GET_ASSET_COMPONENTS = "/get-asset-components/:assetId";
 }
