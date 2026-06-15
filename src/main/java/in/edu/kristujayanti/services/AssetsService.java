@@ -132,7 +132,7 @@ public class AssetsService {
         .append("returnStatus", false)
         .append("returnDate", null);
 
-    MongoCollection<Document> collection = mongoDatabase.getCollection("issueto");
+    collection = mongoDatabase.getCollection("issueto");
 
     collection.insertOne(issueDocument);
 
@@ -1847,5 +1847,66 @@ public class AssetsService {
         .atZone(java.time.ZoneOffset.UTC)
         .toLocalDate()
         .toString();
+  }
+
+  /**
+   * Searches for assets that are not currently issued, optionally filtered by a keypress on assetName.
+   * Returns a distinct list of matching assetNames.
+   *
+   * @param query keypress search filter for assetName
+   * @return JsonArray of distinct matching assetNames
+   */
+  public JsonArray getUnissuedAssetNames(String query) {
+    LOGGER.info("Fetching unissued asset names with query: {}", query);
+    JsonArray result = new JsonArray();
+    MongoCollection<Document> collection = mongoDatabase.getCollection(ASSETS_COLLECTION);
+
+    List<Document> pipeline = new ArrayList<>();
+
+    // Match conditions for assetName regex (keypress filter)
+    List<Document> matchConditions = new ArrayList<>();
+    if (query != null && !query.isBlank()) {
+      matchConditions.add(new Document("assetName",
+          new Document("$regex", Pattern.quote(query.trim()))
+              .append("$options", "i")));
+    }
+    if (!matchConditions.isEmpty()) {
+      pipeline.add(new Document("$match",
+          matchConditions.size() == 1
+              ? matchConditions.get(0)
+              : new Document("$and", matchConditions)));
+    }
+
+    // Lookup active issues (where returnStatus is not true)
+    pipeline.add(new Document("$lookup",
+        new Document("from", "issueto")
+            .append("let", new Document("asset_id", "$_id"))
+            .append("pipeline", List.of(
+                new Document("$match", new Document("$expr",
+                    new Document("$and", List.of(
+                        new Document("$eq", List.of("$assetId", "$$asset_id")),
+                        new Document("$ne", List.of("$returnStatus", true))
+                    ))
+                ))
+            ))
+            .append("as", "activeIssues")
+    ));
+
+    // Match assets where activeIssues is empty (not issued)
+    pipeline.add(new Document("$match", new Document("activeIssues", new Document("$size", 0))));
+
+    // Group by assetName to get unique/distinct names
+    pipeline.add(new Document("$group", new Document("_id", "$assetName")));
+
+    // Sort alphabetically
+    pipeline.add(new Document("$sort", new Document("_id", 1)));
+
+    for (Document doc : collection.aggregate(pipeline)) {
+      String name = doc.getString("_id");
+      if (name != null) {
+        result.add(name);
+      }
+    }
+    return result;
   }
 }

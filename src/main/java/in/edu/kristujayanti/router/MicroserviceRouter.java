@@ -158,6 +158,10 @@ public class MicroserviceRouter extends RouterBase {
         new GetCategoriesListHandler(assetsService));
     addRoute(
         HttpMethod.GET,
+        MicroserviceRoutingURLNames.UNISSUED_ASSET_NAMES,
+        new GetUnissuedAssetNamesHandler(assetsService));
+    addRoute(
+        HttpMethod.GET,
         MicroserviceRoutingURLNames.GET_LICENSES,
         new GetLicensesHandler(assetsService));
     addRoute(

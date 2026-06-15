@@ -1,13 +1,11 @@
-<<<<<<< HEAD
 in\edu\kristujayanti\handlers\GetAssetTagsListHandler.class
+in\edu\kristujayanti\handlers\GetUnissuedAssetNamesHandler.class
 in\edu\kristujayanti\router\MicroserviceRouter.class
 in\edu\kristujayanti\handlers\GetCategoriesListHandler.class
-=======
->>>>>>> origin/swathi
 in\edu\kristujayanti\handlers\HealthHandler.class
+in\edu\kristujayanti\handlers\ReturnLogHandler.class
 in\edu\kristujayanti\router\SubRouterBuilderBase.class
 in\edu\kristujayanti\router\SubRouterBuilders.class
-<<<<<<< HEAD
 in\edu\kristujayanti\handlers\GetAssetDetailsHandler.class
 in\edu\kristujayanti\handlers\CreateAssetTagHandler.class
 in\edu\kristujayanti\handlers\ReturnAssetCreateHandler.class
@@ -20,6 +18,8 @@ in\edu\kristujayanti\constants\ContextRoutingURLName.class
 in\edu\kristujayanti\constants\ConstantKeys.class
 in\edu\kristujayanti\router\RouterBuilder.class
 in\edu\kristujayanti\handlers\AssetsSearchHandler.class
+in\edu\kristujayanti\handlers\GetAssetComponentsHandler.class
+in\edu\kristujayanti\handlers\GetLicensesHandler.class
 in\edu\kristujayanti\handlers\EditAssetHandler.class
 in\edu\kristujayanti\constants\UrlPathAndQueryParams.class
 in\edu\kristujayanti\handlers\IssueAssetCreateHandler.class
@@ -33,13 +33,3 @@ in\edu\kristujayanti\MicroserviceStarter.class
 in\edu\kristujayanti\handlers\GetStatusCountHandler.class
 in\edu\kristujayanti\handlers\GetAssetsStatusSummary.class
 in\edu\kristujayanti\handlers\AssetGroupingHandler.class
-=======
-in\edu\kristujayanti\router\RouterBase.class
-in\edu\kristujayanti\router\RouterBuilderService.class
-in\edu\kristujayanti\constants\ContextRoutingURLName.class
-in\edu\kristujayanti\constants\ConstantKeys.class
-in\edu\kristujayanti\router\RouterBuilder.class
-in\edu\kristujayanti\constants\UrlPathAndQueryParams.class
-in\edu\kristujayanti\services\HealthService.class
-in\edu\kristujayanti\constants\MicroserviceRoutingURLNames.class
->>>>>>> origin/swathi
