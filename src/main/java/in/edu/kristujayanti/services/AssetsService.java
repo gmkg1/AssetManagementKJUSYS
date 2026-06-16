@@ -1435,6 +1435,7 @@ public class AssetsService {
           .put("_id", objectIdToString(doc.getObjectId("_id")))
           .put("assetName", doc.getString("assetName"))
           .put("assetTagName", tagLabel)
+          .put("assetSerialNumber", doc.getString("assetSerialNumber") != null ? doc.getString("assetSerialNumber") : "")
           .put("isIssuable", doc.getBoolean("isIssuable")));
     }
     return result;
@@ -1901,16 +1902,18 @@ public class AssetsService {
     // Match assets where activeIssues is empty (not issued)
     pipeline.add(new Document("$match", new Document("activeIssues", new Document("$size", 0))));
 
-    // Group by assetName to get unique/distinct names
-    pipeline.add(new Document("$group", new Document("_id", "$assetName")));
-
-    // Sort alphabetically
-    pipeline.add(new Document("$sort", new Document("_id", 1)));
+    // Sort alphabetically by assetName
+    pipeline.add(new Document("$sort", new Document("assetName", 1)));
 
     for (Document doc : collection.aggregate(pipeline)) {
-      String name = doc.getString("_id");
+      String name = doc.getString("assetName");
+      String serial = doc.getString("assetSerialNumber");
       if (name != null) {
-        result.add(name);
+        JsonObject obj = new JsonObject()
+            .put("_id", objectIdToString(doc.getObjectId("_id")))
+            .put("assetName", name)
+            .put("assetSerialNumber", serial != null ? serial : "");
+        result.add(obj);
       }
     }
     return result;
