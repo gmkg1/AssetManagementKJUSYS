@@ -17,7 +17,7 @@ public interface MicroserviceRoutingURLNames {
     String CATEGORIES = "/categories";
     String RETURN = "/return-logs";
     String ASSETSTATUSSUMMARY = "/asset-status-summary";
-    String ISSUEDASSETS = "/issued-assets"  ;
+    String ISSUEDASSETS = "/issued-assets";
     String ISSUEASSET = "/issue-asset";
     String RETURN_ASSET = "/return-asset";
     String GRP = "/grp";
@@ -33,5 +33,7 @@ public interface MicroserviceRoutingURLNames {
     String CATEGORIES_LIST = "/categories-list";
     String GET_LICENSES = "/get-licenses/:assetId";
     String GET_ASSET_COMPONENTS = "/get-asset-components/:assetId";
+    String GENERATE_DISPLAY_ID = "/generate-display-id";
+    String CREATE_LICENSES = "/create-licenses";
     String UNISSUED_ASSET_NAMES = "/unissued-asset-names";
 }

@@ -1,4 +1,7 @@
 in\edu\kristujayanti\handlers\GetAssetTagsListHandler.class
+in\edu\kristujayanti\router\MicroserviceRouter.class
+in\edu\kristujayanti\handlers\GetCategoriesListHandler.class
+in\edu\kristujayanti\handlers\GetAssetTagsListHandler.class
 in\edu\kristujayanti\handlers\GetUnissuedAssetNamesHandler.class
 in\edu\kristujayanti\router\MicroserviceRouter.class
 in\edu\kristujayanti\handlers\GetCategoriesListHandler.class
@@ -6,6 +9,11 @@ in\edu\kristujayanti\handlers\HealthHandler.class
 in\edu\kristujayanti\handlers\ReturnLogHandler.class
 in\edu\kristujayanti\router\SubRouterBuilderBase.class
 in\edu\kristujayanti\router\SubRouterBuilders.class
+in\edu\kristujayanti\handlers\GetAssetDetailsHandler.class
+in\edu\kristujayanti\handlers\CreateAssetTagHandler.class
+in\edu\kristujayanti\handlers\ReturnAssetCreateHandler.class
+in\edu\kristujayanti\handlers\CreateLicensesHandler.class
+in\edu\kristujayanti\handlers\GetStatusesListHandler.class
 in\edu\kristujayanti\handlers\GetAssetDetailsHandler.class
 in\edu\kristujayanti\handlers\CreateAssetTagHandler.class
 in\edu\kristujayanti\handlers\ReturnAssetCreateHandler.class
@@ -22,6 +30,9 @@ in\edu\kristujayanti\handlers\GetAssetComponentsHandler.class
 in\edu\kristujayanti\handlers\GetLicensesHandler.class
 in\edu\kristujayanti\handlers\EditAssetHandler.class
 in\edu\kristujayanti\constants\UrlPathAndQueryParams.class
+in\edu\kristujayanti\handlers\IssueAssetCreateHandler.class
+in\edu\kristujayanti\services\AssetsService.class
+in\edu\kristujayanti\handlers\DisplayIdHandler.class
 in\edu\kristujayanti\handlers\IssueAssetCreateHandler.class
 in\edu\kristujayanti\services\AssetsService.class
 in\edu\kristujayanti\services\HealthService.class

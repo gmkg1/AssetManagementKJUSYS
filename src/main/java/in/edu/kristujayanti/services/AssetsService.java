@@ -1435,7 +1435,8 @@ public class AssetsService {
           .put("_id", objectIdToString(doc.getObjectId("_id")))
           .put("assetName", doc.getString("assetName"))
           .put("assetTagName", tagLabel)
-          .put("assetSerialNumber", doc.getString("assetSerialNumber") != null ? doc.getString("assetSerialNumber") : "")
+          .put("assetSerialNumber",
+              doc.getString("assetSerialNumber") != null ? doc.getString("assetSerialNumber") : "")
           .put("isIssuable", doc.getBoolean("isIssuable")));
     }
     return result;
@@ -1798,7 +1799,7 @@ public class AssetsService {
 
       warrantyArray.add(new JsonObject()
           .put("provider", doc.getString("provider"))
-          .put("displayId", doc.getString("displayId"))
+          .put("referenceId", doc.getString("referenceId"))
           .put("startDate", formatDateOnly(doc.getDate("startDate")))
           .put("endDate", formatDateOnly(doc.getDate("endDate")))
           .put("status", status));
@@ -1857,7 +1858,198 @@ public class AssetsService {
   }
 
   /**
-   * Searches for assets that are not currently issued, optionally filtered by a keypress on assetName.
+   * Generates a display ID for an Asset based on tag and location IDs.
+   * Format: {AssetTagDisplayId}-{AssetSequence}-{LocationDisplayId}
+   */
+  public String generateAssetDisplayId(String assetTagId, String locationId) {
+    if (assetTagId == null || assetTagId.isBlank()) {
+      throw new IllegalArgumentException("assetTagId is required");
+    }
+    if (locationId == null || locationId.isBlank()) {
+      throw new IllegalArgumentException("locationId is required");
+    }
+
+    LOGGER.info("Generating Asset displayId for assetTagId={}, locationId={}", assetTagId, locationId);
+
+    // 1. Fetch assettags document
+    MongoCollection<Document> assetTagsColl = mongoDatabase.getCollection("assettags");
+    Document assetTag = assetTagsColl.find(new Document("_id", new ObjectId(assetTagId.trim()))).first();
+    if (assetTag == null) {
+      throw new IllegalArgumentException("Asset tag not found for ID: " + assetTagId);
+    }
+
+    // 2. Read assettags.displayId
+    String assetTagDisplayId = assetTag.getString("displayId");
+    if (assetTagDisplayId == null || assetTagDisplayId.isBlank()) {
+      throw new IllegalArgumentException("Asset tag displayId is missing for ID: " + assetTagId);
+    }
+
+    // 3. Fetch locations document
+    MongoCollection<Document> locationsColl = mongoDatabase.getCollection("locations");
+    Document location = locationsColl.find(new Document("_id", new ObjectId(locationId.trim()))).first();
+    if (location == null) {
+      throw new IllegalArgumentException("Location not found for ID: " + locationId);
+    }
+
+    // 4. Read locations.displayId
+    String locationDisplayId = location.getString("displayId");
+    if (locationDisplayId == null || locationDisplayId.isBlank()) {
+      throw new IllegalArgumentException("Location displayId is missing for ID: " + locationId);
+    }
+
+    // 5. Generate next AssetSequence (incrementing the counter)
+    int nextSeq = getNextSequence(assetTagDisplayId.trim());
+    String sequenceStr = String.format("%03d", nextSeq);
+
+    // 6. Construct final Asset displayId
+    String finalDisplayId = assetTagDisplayId.trim() + "-" + sequenceStr + "-" + locationDisplayId.trim();
+
+    LOGGER.info("Generated Asset displayId: {}", finalDisplayId);
+    return finalDisplayId;
+  }
+
+  /**
+   * Atomically generates/increments the next sequence value for the sequence key.
+   */
+  private int getNextSequence(String sequenceKey) {
+    MongoCollection<Document> seqColl = mongoDatabase.getCollection("displayid_sequences");
+    Document query = new Document("_id", sequenceKey);
+    Document update = new Document("$inc", new Document("nextValue", 1));
+    com.mongodb.client.model.FindOneAndUpdateOptions options = new com.mongodb.client.model.FindOneAndUpdateOptions()
+        .upsert(true)
+        .returnDocument(com.mongodb.client.model.ReturnDocument.AFTER);
+
+    Document result = seqColl.findOneAndUpdate(query, update, options);
+    if (result == null) {
+      throw new RuntimeException("Failed to update sequence for key: " + sequenceKey);
+    }
+    return result.getInteger("nextValue");
+  }
+
+  public JsonObject saveLicensesAndWarranty(JsonObject payload) {
+    LOGGER.info("Saving licenses and warranty record");
+    if (payload == null) {
+      throw new IllegalArgumentException("Request body is required");
+    }
+
+    String assetId = payload.getString("assetId");
+    validateAssetId(assetId);
+
+    boolean hasLicense = payload.getString("licenseName") != null && !payload.getString("licenseName").isBlank();
+    boolean hasWarranty = payload.getString("provider") != null && !payload.getString("provider").isBlank();
+
+    if (!hasLicense && !hasWarranty) {
+      throw new IllegalArgumentException(
+          "At least licenseName (for license) or provider (for warranty) must be specified");
+    }
+
+    JsonObject responseResult = new JsonObject().put("message", "Licenses and warranty details saved successfully");
+    ObjectId assetObjectId = new ObjectId(assetId.trim());
+
+    if (hasLicense) {
+      String licenseName = payload.getString("licenseName");
+      String licenseKey = payload.getString("licenseKey");
+      String expiryDateStr = payload.getString("expiryDate");
+
+      if (licenseKey == null || licenseKey.isBlank()) {
+        throw new IllegalArgumentException("licenseKey is required when saving license");
+      }
+
+      Date expiryDate = (expiryDateStr != null && !expiryDateStr.isBlank()) ? parseLocalDate(expiryDateStr) : null;
+
+      Document licenseDocument = new Document("assetId", assetObjectId)
+          .append("licenseName", licenseName.trim())
+          .append("licenseKey", licenseKey.trim())
+          .append("expiryDate", expiryDate);
+
+      MongoCollection<Document> licensesCollection = mongoDatabase.getCollection("licenses");
+      licensesCollection.insertOne(licenseDocument);
+      responseResult.put("licenseId", objectIdToString(licenseDocument.getObjectId("_id")));
+    }
+
+    if (hasWarranty) {
+      String provider = payload.getString("provider");
+      String startDateStr = payload.getString("startDate");
+      String endDateStr = payload.getString("endDate");
+
+      String referenceId = payload.getString("referenceId");
+
+      Boolean activeStatus = null;
+      if (payload.containsKey("ActiveStatus")) {
+        Object activeStatusVal = payload.getValue("ActiveStatus");
+        if (activeStatusVal instanceof Boolean) {
+          activeStatus = (Boolean) activeStatusVal;
+        } else if (activeStatusVal instanceof String) {
+          activeStatus = "Active".equalsIgnoreCase(((String) activeStatusVal).trim())
+              || "true".equalsIgnoreCase(((String) activeStatusVal).trim());
+        }
+      }
+
+      if (referenceId == null || referenceId.isBlank()) {
+        throw new IllegalArgumentException("referenceId is required when saving warranty");
+      }
+      if (activeStatus == null) {
+        throw new IllegalArgumentException("ActiveStatus is required when saving warranty");
+      }
+      if (startDateStr == null || startDateStr.isBlank()) {
+        throw new IllegalArgumentException("startDate is required when saving warranty");
+      }
+      if (endDateStr == null || endDateStr.isBlank()) {
+        throw new IllegalArgumentException("endDate is required when saving warranty");
+      }
+
+      Date startDate = parseLocalDate(startDateStr);
+      Date endDate = parseLocalDate(endDateStr);
+
+      if (startDate != null && endDate != null && endDate.before(startDate)) {
+        throw new IllegalArgumentException("endDate cannot be before startDate");
+      }
+
+      Document warrantyDocument = new Document("assetId", assetObjectId)
+          .append("provider", provider.trim())
+          .append("startDate", startDate)
+          .append("endDate", endDate)
+          .append("referenceId", referenceId.trim())
+          .append("ActiveStatus", activeStatus);
+
+      MongoCollection<Document> warrantyCollection = mongoDatabase.getCollection("warranty");
+      warrantyCollection.insertOne(warrantyDocument);
+      responseResult.put("warrantyId", objectIdToString(warrantyDocument.getObjectId("_id")));
+    }
+
+    return responseResult;
+  }
+
+  private void validateAssetId(String assetId) {
+    if (assetId == null || assetId.isBlank()) {
+      throw new IllegalArgumentException("assetId is required");
+    }
+    if (!ObjectId.isValid(assetId.trim())) {
+      throw new IllegalArgumentException("Invalid assetId");
+    }
+    MongoCollection<Document> assetsColl = mongoDatabase.getCollection(ASSETS_COLLECTION);
+    Document asset = assetsColl.find(new Document("_id", new ObjectId(assetId.trim()))).first();
+    if (asset == null) {
+      throw new IllegalArgumentException("Asset not found with ID: " + assetId);
+    }
+  }
+
+  private Date parseLocalDate(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    try {
+      return java.util.Date.from(java.time.LocalDate.parse(value.trim())
+          .atStartOfDay(java.time.ZoneId.systemDefault())
+          .toInstant());
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Invalid date format: '" + value + "'. Expected format: YYYY-MM-DD");
+    }
+  }
+
+  /**
+   * Searches for assets that are not currently issued, optionally filtered by a
+   * keypress on assetName.
    * Returns a distinct list of matching assetNames.
    *
    * @param query keypress search filter for assetName
@@ -1892,12 +2084,8 @@ public class AssetsService {
                 new Document("$match", new Document("$expr",
                     new Document("$and", List.of(
                         new Document("$eq", List.of("$assetId", "$$asset_id")),
-                        new Document("$ne", List.of("$returnStatus", true))
-                    ))
-                ))
-            ))
-            .append("as", "activeIssues")
-    ));
+                        new Document("$ne", List.of("$returnStatus", true))))))))
+            .append("as", "activeIssues")));
 
     // Match assets where activeIssues is empty (not issued)
     pipeline.add(new Document("$match", new Document("activeIssues", new Document("$size", 0))));
