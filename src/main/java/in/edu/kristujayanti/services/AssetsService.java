@@ -809,6 +809,7 @@ public class AssetsService {
 
       if (assetDoc != null) {
         json.put("assetName", assetDoc.getString("assetName"));
+        json.put("assetSerialNumber", assetDoc.getString("assetSerialNumber"));
       }
 
       if (categoryDoc != null) {
