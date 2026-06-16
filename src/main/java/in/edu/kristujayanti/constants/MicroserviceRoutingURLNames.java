@@ -33,4 +33,6 @@ public interface MicroserviceRoutingURLNames {
     String CATEGORIES_LIST = "/categories-list";
     String GET_LICENSES = "/get-licenses/:assetId";
     String GET_ASSET_COMPONENTS = "/get-asset-components/:assetId";
+    String GENERATE_DISPLAY_ID = "/generate-display-id";
+    String CREATE_LICENSES = "/create-licenses";
 }

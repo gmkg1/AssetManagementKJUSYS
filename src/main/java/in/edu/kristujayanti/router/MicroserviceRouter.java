@@ -164,6 +164,16 @@ public class MicroserviceRouter extends RouterBase {
         HttpMethod.GET,
         MicroserviceRoutingURLNames.GET_ASSET_COMPONENTS,
         new GetAssetComponentsHandler(assetsService));
+
+    addRoute(
+        HttpMethod.POST,
+        MicroserviceRoutingURLNames.GENERATE_DISPLAY_ID,
+        new DisplayIdHandler(assetsService));
+
+    addRoute(
+        HttpMethod.POST,
+        MicroserviceRoutingURLNames.CREATE_LICENSES,
+        new CreateLicensesHandler(assetsService));
   }
 
   /**
