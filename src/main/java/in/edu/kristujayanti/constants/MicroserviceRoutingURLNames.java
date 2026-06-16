@@ -36,4 +36,5 @@ public interface MicroserviceRoutingURLNames {
     String GENERATE_DISPLAY_ID = "/generate-display-id";
     String CREATE_LICENSES = "/create-licenses";
     String UNISSUED_ASSET_NAMES = "/unissued-asset-names";
+    String GET_ASSET_HISTORY = "/asset-history/:assetId";
 }

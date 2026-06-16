@@ -396,6 +396,7 @@ public class AssetsService {
           json.put("_id", objectIdToString(doc.getObjectId("_id")));
           json.put("assetName",
               doc.getString("assetName"));
+          json.put("displayId", doc.getString("displayId") != null ? doc.getString("displayId") : "");
           json.put("assetSerialNumber", doc.getString("assetSerialNumber"));
           json.put("purchaseCost", doc.getInteger("purchaseCost"));
           json.put("purchaseDate", dateToString(doc.getDate("purchaseDate")));
@@ -1470,7 +1471,8 @@ public class AssetsService {
         .put("campusId", objectIdToString(asset.getObjectId("campusId")))
         .put("blockId", asset.getString("blockId"))
         .put("statusId", objectIdToString(asset.getObjectId("statusId")))
-        .put("locationId", objectIdToString(asset.getObjectId("locationId")));
+        .put("locationId", objectIdToString(asset.getObjectId("locationId")))
+        .put("displayId", asset.getString("displayId"));
   }
 
   private String objectIdToString(ObjectId objectId) {
@@ -1555,6 +1557,15 @@ public class AssetsService {
       }
     }
 
+    String displayId = null;
+    if (defaultLocation != null && !defaultLocation.isBlank()) {
+      try {
+        displayId = generateAssetDisplayId(assetTagId, defaultLocation);
+      } catch (Exception e) {
+        LOGGER.error("Failed to generate asset displayId during creation", e);
+      }
+    }
+
     Document assetDocument = new Document("assetName", assetName.trim())
         .append("assetTagId", new ObjectId(assetTagId.trim()))
         .append("statusId", new ObjectId(statusId.trim()))
@@ -1568,12 +1579,17 @@ public class AssetsService {
         .append("blockId", "B002")
         .append("unitOfMeasureId", unitOfMeasureId);
 
+    if (displayId != null) {
+      assetDocument.append("displayId", displayId);
+    }
+
     MongoCollection<Document> collection = mongoDatabase.getCollection(ASSETS_COLLECTION);
     collection.insertOne(assetDocument);
 
     return new JsonObject()
         .put("message", "Asset created successfully")
-        .put("_id", objectIdToString(assetDocument.getObjectId("_id")));
+        .put("_id", objectIdToString(assetDocument.getObjectId("_id")))
+        .put("displayId", displayId);
   }
 
   public JsonObject createAssetTag(JsonObject payload) {
@@ -1935,8 +1951,49 @@ public class AssetsService {
     String assetId = payload.getString("assetId");
     validateAssetId(assetId);
 
-    boolean hasLicense = payload.getString("licenseName") != null && !payload.getString("licenseName").isBlank();
-    boolean hasWarranty = payload.getString("provider") != null && !payload.getString("provider").isBlank();
+    // Support nested or flat payloads
+    JsonObject licenseObj = payload.getJsonObject("license");
+    JsonObject warrantyObj = payload.getJsonObject("warranty");
+
+    String licenseName = null;
+    String licenseKey = null;
+    String expiryDateStr = null;
+    boolean hasLicense = false;
+
+    if (licenseObj != null) {
+      licenseName = licenseObj.getString("licenseName");
+      licenseKey = licenseObj.getString("licenseKey");
+      expiryDateStr = licenseObj.getString("expiryDate");
+      hasLicense = licenseName != null && !licenseName.isBlank();
+    } else {
+      licenseName = payload.getString("licenseName");
+      licenseKey = payload.getString("licenseKey");
+      expiryDateStr = payload.getString("expiryDate");
+      hasLicense = licenseName != null && !licenseName.isBlank();
+    }
+
+    String provider = null;
+    String startDateStr = null;
+    String endDateStr = null;
+    String referenceId = null;
+    Object activeStatusVal = null;
+    boolean hasWarranty = false;
+
+    if (warrantyObj != null) {
+      provider = warrantyObj.getString("provider");
+      startDateStr = warrantyObj.getString("startDate");
+      endDateStr = warrantyObj.getString("endDate");
+      referenceId = warrantyObj.containsKey("referenceId") ? warrantyObj.getString("referenceId") : warrantyObj.getString("displayId");
+      activeStatusVal = warrantyObj.containsKey("ActiveStatus") ? warrantyObj.getValue("ActiveStatus") : warrantyObj.getValue("status");
+      hasWarranty = provider != null && !provider.isBlank();
+    } else {
+      provider = payload.getString("provider");
+      startDateStr = payload.getString("startDate");
+      endDateStr = payload.getString("endDate");
+      referenceId = payload.getString("referenceId");
+      activeStatusVal = payload.getValue("ActiveStatus");
+      hasWarranty = provider != null && !provider.isBlank();
+    }
 
     if (!hasLicense && !hasWarranty) {
       throw new IllegalArgumentException(
@@ -1947,10 +2004,6 @@ public class AssetsService {
     ObjectId assetObjectId = new ObjectId(assetId.trim());
 
     if (hasLicense) {
-      String licenseName = payload.getString("licenseName");
-      String licenseKey = payload.getString("licenseKey");
-      String expiryDateStr = payload.getString("expiryDate");
-
       if (licenseKey == null || licenseKey.isBlank()) {
         throw new IllegalArgumentException("licenseKey is required when saving license");
       }
@@ -1968,15 +2021,8 @@ public class AssetsService {
     }
 
     if (hasWarranty) {
-      String provider = payload.getString("provider");
-      String startDateStr = payload.getString("startDate");
-      String endDateStr = payload.getString("endDate");
-
-      String referenceId = payload.getString("referenceId");
-
       Boolean activeStatus = null;
-      if (payload.containsKey("ActiveStatus")) {
-        Object activeStatusVal = payload.getValue("ActiveStatus");
+      if (activeStatusVal != null) {
         if (activeStatusVal instanceof Boolean) {
           activeStatus = (Boolean) activeStatusVal;
         } else if (activeStatusVal instanceof String) {
@@ -1986,10 +2032,10 @@ public class AssetsService {
       }
 
       if (referenceId == null || referenceId.isBlank()) {
-        throw new IllegalArgumentException("referenceId is required when saving warranty");
+        throw new IllegalArgumentException("referenceId/displayId is required when saving warranty");
       }
       if (activeStatus == null) {
-        throw new IllegalArgumentException("ActiveStatus is required when saving warranty");
+        throw new IllegalArgumentException("ActiveStatus/status is required when saving warranty");
       }
       if (startDateStr == null || startDateStr.isBlank()) {
         throw new IllegalArgumentException("startDate is required when saving warranty");
@@ -2105,5 +2151,86 @@ public class AssetsService {
       }
     }
     return result;
+  }
+
+  public JsonObject getAssetHistory(String assetId) {
+    LOGGER.info("Fetching asset history for assetId: {}", assetId);
+    if (assetId == null || assetId.isBlank()) {
+      throw new IllegalArgumentException("assetId is required");
+    }
+    if (!ObjectId.isValid(assetId.trim())) {
+      throw new IllegalArgumentException("Invalid assetId");
+    }
+
+    ObjectId id = new ObjectId(assetId.trim());
+    MongoCollection<Document> issuetoColl = mongoDatabase.getCollection("issueto");
+
+    List<Document> pipeline = new ArrayList<>();
+    pipeline.add(new Document("$match", new Document("assetId", id)));
+
+    // Lookup location details
+    pipeline.add(new Document("$lookup",
+        new Document("from", "locations")
+            .append("localField", "locationId")
+            .append("foreignField", "_id")
+            .append("as", "locationDoc")));
+
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$locationDoc")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    // Lookup issued to asset details
+    pipeline.add(new Document("$lookup",
+        new Document("from", "assets")
+            .append("localField", "issuedToAssetId")
+            .append("foreignField", "_id")
+            .append("as", "issuedToAssetDoc")));
+
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$issuedToAssetDoc")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    // Sort by issueDate descending
+    pipeline.add(new Document("$sort", new Document("issueDate", -1)));
+
+    JsonArray issues = new JsonArray();
+    JsonArray returns = new JsonArray();
+
+    for (Document doc : issuetoColl.aggregate(pipeline)) {
+      Document locDoc = (Document) doc.get("locationDoc");
+      String locationName = locDoc != null ? locDoc.getString("locationName") : "N/A";
+
+      Document toAssetDoc = (Document) doc.get("issuedToAssetDoc");
+      String issuedToAssetName = toAssetDoc != null ? toAssetDoc.getString("assetName") : "N/A";
+
+      String personId = objectIdToString(doc.getObjectId("personId"));
+      if (personId == null) {
+        personId = "N/A";
+      }
+
+      Date issueDate = doc.getDate("issueDate");
+      JsonObject issueObj = new JsonObject()
+          .put("issueDate", dateToString(issueDate))
+          .put("location", locationName)
+          .put("personId", personId)
+          .put("issuedToAsset", issuedToAssetName);
+      issues.add(issueObj);
+
+      Boolean returnStatus = doc.getBoolean("returnStatus");
+      if (Boolean.TRUE.equals(returnStatus)) {
+        Date returnDate = doc.getDate("returnDate");
+        JsonObject returnObj = new JsonObject()
+            .put("returnDate", dateToString(returnDate))
+            .put("location", locationName)
+            .put("personId", personId)
+            .put("returnedToAsset", issuedToAssetName);
+        returns.add(returnObj);
+      }
+    }
+
+    return new JsonObject()
+        .put("dispatches", new JsonArray())
+        .put("issues", issues)
+        .put("returns", returns);
   }
 }

@@ -6,6 +6,7 @@ in\edu\kristujayanti\handlers\HealthHandler.class
 in\edu\kristujayanti\handlers\ReturnLogHandler.class
 in\edu\kristujayanti\router\SubRouterBuilderBase.class
 in\edu\kristujayanti\router\SubRouterBuilders.class
+in\edu\kristujayanti\handlers\GetAssetHistoryHandler.class
 in\edu\kristujayanti\handlers\GetAssetDetailsHandler.class
 in\edu\kristujayanti\handlers\CreateAssetTagHandler.class
 in\edu\kristujayanti\handlers\ReturnAssetCreateHandler.class

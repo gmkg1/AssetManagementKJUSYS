@@ -178,6 +178,11 @@ public class MicroserviceRouter extends RouterBase {
         HttpMethod.POST,
         MicroserviceRoutingURLNames.CREATE_LICENSES,
         new CreateLicensesHandler(assetsService));
+
+    addRoute(
+        HttpMethod.GET,
+        MicroserviceRoutingURLNames.GET_ASSET_HISTORY,
+        new GetAssetHistoryHandler(assetsService));
   }
 
   /**
