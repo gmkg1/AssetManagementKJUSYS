@@ -342,6 +342,11 @@ public class AssetsService {
     }
 
     // =========================
+    // SORT
+    // =========================
+    pipeline.add(new Document("$sort", new Document("_id", -1)));
+
+    // =========================
     // FACET
     // =========================
     pipeline.add(

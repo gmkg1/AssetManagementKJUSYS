@@ -71,9 +71,13 @@ public class AssetsHandler implements Handler<RoutingContext> {
           pageSize
         );
 
+      // Sort assets by most recently added (newest _id first)
+      java.util.List<JsonObject> sortedData = new java.util.ArrayList<>(result.getData());
+      sortedData.sort((a, b) -> b.getString("_id").compareTo(a.getString("_id")));
+
       JsonArray assets = new JsonArray();
 
-      for (JsonObject asset : result.getData()) {
+      for (JsonObject asset : sortedData) {
         assets.add(asset);
       }
 
