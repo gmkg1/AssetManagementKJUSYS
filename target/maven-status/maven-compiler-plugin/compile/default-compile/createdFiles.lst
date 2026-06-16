@@ -1,7 +1,4 @@
 in\edu\kristujayanti\handlers\GetAssetTagsListHandler.class
-in\edu\kristujayanti\router\MicroserviceRouter.class
-in\edu\kristujayanti\handlers\GetCategoriesListHandler.class
-in\edu\kristujayanti\handlers\GetAssetTagsListHandler.class
 in\edu\kristujayanti\handlers\GetUnissuedAssetNamesHandler.class
 in\edu\kristujayanti\router\MicroserviceRouter.class
 in\edu\kristujayanti\handlers\GetCategoriesListHandler.class
@@ -13,10 +10,6 @@ in\edu\kristujayanti\handlers\GetAssetDetailsHandler.class
 in\edu\kristujayanti\handlers\CreateAssetTagHandler.class
 in\edu\kristujayanti\handlers\ReturnAssetCreateHandler.class
 in\edu\kristujayanti\handlers\CreateLicensesHandler.class
-in\edu\kristujayanti\handlers\GetStatusesListHandler.class
-in\edu\kristujayanti\handlers\GetAssetDetailsHandler.class
-in\edu\kristujayanti\handlers\CreateAssetTagHandler.class
-in\edu\kristujayanti\handlers\ReturnAssetCreateHandler.class
 in\edu\kristujayanti\handlers\GetStatusesListHandler.class
 in\edu\kristujayanti\router\RouterBase.class
 in\edu\kristujayanti\router\RouterBuilderService.class
@@ -33,8 +26,6 @@ in\edu\kristujayanti\constants\UrlPathAndQueryParams.class
 in\edu\kristujayanti\handlers\IssueAssetCreateHandler.class
 in\edu\kristujayanti\services\AssetsService.class
 in\edu\kristujayanti\handlers\DisplayIdHandler.class
-in\edu\kristujayanti\handlers\IssueAssetCreateHandler.class
-in\edu\kristujayanti\services\AssetsService.class
 in\edu\kristujayanti\services\HealthService.class
 in\edu\kristujayanti\handlers\CreateAssetHandler.class
 in\edu\kristujayanti\handlers\GetCategoryCountHandler.class
