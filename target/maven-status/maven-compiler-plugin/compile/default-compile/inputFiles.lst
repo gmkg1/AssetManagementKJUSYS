@@ -10,6 +10,10 @@ C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\CreateLicensesHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\DisplayIdHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\EditAssetHandler.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\ExportAssetsHandler.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\ExportIssueLogsHandler.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\ExportReportsHandler.java
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\ExportReturnLogsHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetAssetComponentsHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetAssetDetailsHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetAssetHistoryHandler.java
@@ -22,7 +26,11 @@ C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetStatusCountHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetStatusesListHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetUnissuedAssetNamesHandler.java
+<<<<<<< HEAD
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GetUnitsListHandler.java
+=======
+C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\GroupedReportsHandler.java
+>>>>>>> 32a6f1d4a85d4bfd2880010e40c64c5b725d3aa8
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\HealthHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\IssueAssetCreateHandler.java
 C:\Users\mahee\Downloads\Asset-Management-Api\Asset-Management-Api\src\main\java\in\edu\kristujayanti\handlers\IssuedAssetsHandler.java

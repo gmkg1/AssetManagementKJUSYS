@@ -37,5 +37,11 @@ public interface MicroserviceRoutingURLNames {
     String CREATE_LICENSES = "/create-licenses";
     String UNISSUED_ASSET_NAMES = "/unissued-asset-names";
     String GET_ASSET_HISTORY = "/asset-history/:assetId";
+    String EXPORT_REPORTS = "/export-reports";
+    String REPORTS_GROUPED = "/reports-grouped";
+    String EXPORT_ASSETS = "/export-assets";
+    String EXPORT_ISSUE_LOGS = "/export-issue-logs";
+    String EXPORT_RETURN_LOGS = "/export-return-logs";
     String UNITS_LIST = "/units-list";
 }
+

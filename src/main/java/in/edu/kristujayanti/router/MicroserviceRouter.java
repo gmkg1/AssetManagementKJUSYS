@@ -186,9 +186,37 @@ public class MicroserviceRouter extends RouterBase {
 
     addRoute(
         HttpMethod.GET,
+
         MicroserviceRoutingURLNames.UNITS_LIST,
         new GetUnitsListHandler(assetsService));
+
+    addRoute(
+            HttpMethod.GET,
+        MicroserviceRoutingURLNames.EXPORT_REPORTS,
+        new ExportReportsHandler(assetsService));
+
+    addRoute(
+        HttpMethod.GET,
+        MicroserviceRoutingURLNames.REPORTS_GROUPED,
+        new GroupedReportsHandler(assetsService));
+
+    addRoute(
+        HttpMethod.GET,
+        MicroserviceRoutingURLNames.EXPORT_ASSETS,
+        new ExportAssetsHandler(assetsService));
+
+    addRoute(
+        HttpMethod.GET,
+        MicroserviceRoutingURLNames.EXPORT_ISSUE_LOGS,
+        new ExportIssueLogsHandler(assetsService));
+
+    addRoute(
+        HttpMethod.GET,
+        MicroserviceRoutingURLNames.EXPORT_RETURN_LOGS,
+        new ExportReturnLogsHandler(assetsService));
+
   }
+
 
   /**
    * Helper method to add routes with the specified method, path, and handler.

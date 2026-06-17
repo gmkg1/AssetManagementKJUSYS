@@ -2270,4 +2270,695 @@ public class AssetsService {
         .put("issues", issues)
         .put("returns", returns);
   }
+
+  private List<Document> getGroupedReportsPipeline(String categoryId) {
+    List<Document> pipeline = new ArrayList<>();
+
+    // Match categoryId if provided
+    List<Document> matchConditions = new ArrayList<>();
+    if (categoryId != null && !categoryId.isBlank() && ObjectId.isValid(categoryId.trim())) {
+      matchConditions.add(new Document("categoryId", new ObjectId(categoryId.trim())));
+    }
+    if (!matchConditions.isEmpty()) {
+      pipeline.add(new Document("$match", matchConditions.get(0)));
+    }
+
+    // Lookup categories
+    pipeline.add(new Document("$lookup", new Document("from", "categories")
+        .append("localField", "categoryId")
+        .append("foreignField", "_id")
+        .append("as", "categoryDoc")));
+    pipeline.add(new Document("$unwind", new Document("path", "$categoryDoc")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    // Lookup assets
+    pipeline.add(new Document("$lookup", new Document("from", "assets")
+        .append("localField", "_id")
+        .append("foreignField", "assetTagId")
+        .append("as", "assetDocs")));
+    pipeline.add(new Document("$unwind", new Document("path", "$assetDocs")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    // Lookup status for the asset
+    pipeline.add(new Document("$lookup", new Document("from", "status")
+        .append("localField", "assetDocs.statusId")
+        .append("foreignField", "_id")
+        .append("as", "statusDoc")));
+    pipeline.add(new Document("$unwind", new Document("path", "$statusDoc")
+        .append("preserveNullAndEmptyArrays", true)));
+
+    // Group stage
+    pipeline.add(new Document("$group", new Document("_id", "$_id")
+        .append("displayId", new Document("$first", "$displayId"))
+        .append("assetTagName", new Document("$first", "$assetTagName"))
+        .append("categoryName", new Document("$first", "$categoryDoc.categoryName"))
+        .append("total", new Document("$sum", new Document("$cond", List.of(
+            new Document("$ifNull", List.of("$assetDocs._id", false)),
+            new Document("$ifNull", List.of("$assetDocs.quantity", 1)),
+            0
+        ))))
+        .append("ready", new Document("$sum", new Document("$cond", List.of(
+            new Document("$eq", List.of("$statusDoc.statusName", "Ready to Deploy")),
+            new Document("$ifNull", List.of("$assetDocs.quantity", 1)),
+            0
+        ))))
+        .append("deployed", new Document("$sum", new Document("$cond", List.of(
+            new Document("$eq", List.of("$statusDoc.statusName", "Deployed")),
+            new Document("$ifNull", List.of("$assetDocs.quantity", 1)),
+            0
+        ))))
+        .append("deadStock", new Document("$sum", new Document("$cond", List.of(
+            new Document("$eq", List.of("$statusDoc.statusName", "Dead Stock")),
+            new Document("$ifNull", List.of("$assetDocs.quantity", 1)),
+            0
+        ))))
+        .append("service", new Document("$sum", new Document("$cond", List.of(
+            new Document("$or", List.of(
+                new Document("$eq", List.of("$statusDoc.statusName", "Under Maintenance")),
+                new Document("$eq", List.of("$statusDoc.statusName", "Under Service"))
+            )),
+            new Document("$ifNull", List.of("$assetDocs.quantity", 1)),
+            0
+        ))))
+        .append("eol", new Document("$sum", new Document("$cond", List.of(
+            new Document("$eq", List.of("$statusDoc.statusName", "Damaged")),
+            new Document("$ifNull", List.of("$assetDocs.quantity", 1)),
+            0
+        ))))
+    ));
+
+    // Sort by assetTagName
+    pipeline.add(new Document("$sort", new Document("assetTagName", 1)));
+
+    return pipeline;
+  }
+
+  @SuppressWarnings("unchecked")
+  public PaginatedResult<JsonObject> getGroupedReports(String categoryId, int page, int pageSize) {
+    LOGGER.info("Fetching grouped reports with categoryId={}, page={}, pageSize={}", categoryId, page, pageSize);
+    MongoCollection<Document> collection = mongoDatabase.getCollection("assettags");
+    List<Document> pipeline = getGroupedReportsPipeline(categoryId);
+
+    int skip = (page - 1) * pageSize;
+    pipeline.add(new Document("$facet", new Document("metadata", List.of(new Document("$count", "totalRecords")))
+        .append("data", List.of(
+            new Document("$skip", skip),
+            new Document("$limit", pageSize)
+        ))
+    ));
+
+    Document facetResult = collection.aggregate(pipeline).first();
+    List<JsonObject> resultData = new ArrayList<>();
+    long totalRecords = 0;
+
+    if (facetResult != null) {
+      List<Document> metadata = (List<Document>) facetResult.get("metadata");
+      if (metadata != null && !metadata.isEmpty()) {
+        totalRecords = metadata.get(0).getInteger("totalRecords", 0);
+      }
+
+      List<Document> data = (List<Document>) facetResult.get("data");
+      if (data != null) {
+        for (Document doc : data) {
+          String displayId = doc.getString("displayId");
+          resultData.add(new JsonObject()
+              .put("displayId", displayId != null ? displayId : "")
+              .put("name", doc.getString("assetTagName"))
+              .put("categoryName", doc.getString("categoryName") != null ? doc.getString("categoryName") : "")
+              .put("total", doc.getInteger("total", 0))
+              .put("ready", doc.getInteger("ready", 0))
+              .put("deployed", doc.getInteger("deployed", 0))
+              .put("deadStock", doc.getInteger("deadStock", 0))
+              .put("service", doc.getInteger("service", 0))
+              .put("eol", doc.getInteger("eol", 0)));
+        }
+      }
+    }
+
+    return new PaginatedResult<>(resultData, totalRecords, page, pageSize);
+  }
+
+  public String exportReports(String categoryId, String assetName, String assetIds) {
+    LOGGER.info("Exporting reports categoryId={}, assetName={}, assetIds={}", categoryId, assetName, assetIds);
+    MongoCollection<Document> collection = mongoDatabase.getCollection("assettags");
+    List<Document> pipeline = getGroupedReportsPipeline(categoryId);
+
+    StringBuilder csv = new StringBuilder();
+    csv.append("Display ID,Name,Category,Total,Ready,Deployed,Dead Stock,Service,EOL\n");
+
+    java.util.Set<String> selectedIds = new java.util.HashSet<>();
+    if (assetIds != null && !assetIds.isBlank()) {
+      for (String id : assetIds.split(",")) {
+        selectedIds.add(id.trim());
+      }
+    }
+
+    for (Document doc : collection.aggregate(pipeline)) {
+      String displayId = doc.getString("displayId");
+      if (displayId == null) {
+        displayId = "";
+      }
+      String name = doc.getString("assetTagName");
+      String category = doc.getString("categoryName");
+      if (category == null) {
+        category = "";
+      }
+
+      if (assetName != null && !assetName.isBlank()) {
+        if (name == null || !name.toLowerCase().contains(assetName.toLowerCase().trim())) {
+          continue;
+        }
+      }
+
+      if (!selectedIds.isEmpty()) {
+        if (!selectedIds.contains(displayId)) {
+          continue;
+        }
+      }
+
+      csv.append(escapeCsv(displayId)).append(",")
+         .append(escapeCsv(name)).append(",")
+         .append(escapeCsv(category)).append(",")
+         .append(doc.getInteger("total", 0)).append(",")
+         .append(doc.getInteger("ready", 0)).append(",")
+         .append(doc.getInteger("deployed", 0)).append(",")
+         .append(doc.getInteger("deadStock", 0)).append(",")
+         .append(doc.getInteger("service", 0)).append(",")
+         .append(doc.getInteger("eol", 0)).append("\n");
+    }
+
+    return csv.toString();
+  }
+
+  private String formatDateCsv(Date date) {
+    if (date == null) {
+      return "—";
+    }
+    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd-MMM-yyyy");
+    return sdf.format(date);
+  }
+
+  public String exportAssets(
+      String assetName,
+      String assetTagName,
+      String categoryId,
+      String locationId,
+      String statusId,
+      String purchaseDateFrom,
+      String purchaseDateTo) {
+
+    LOGGER.info("Exporting assets to CSV");
+    MongoCollection<Document> collection = mongoDatabase.getCollection(ASSETS_COLLECTION);
+
+    List<Document> pipeline = new ArrayList<>();
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "assettags")
+            .append("localField", "assetTagId")
+            .append("foreignField", "_id")
+            .append("as", "assetTag")));
+    pipeline.add(new Document("$unwind", "$assetTag"));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "categories")
+            .append("localField", "assetTag.categoryId")
+            .append("foreignField", "_id")
+            .append("as", "category")));
+    pipeline.add(new Document("$unwind", "$category"));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "campuses")
+            .append("localField", "campusId")
+            .append("foreignField", "_id")
+            .append("as", "campus")));
+    pipeline.add(new Document("$unwind", "$campus"));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "status")
+            .append("localField", "statusId")
+            .append("foreignField", "_id")
+            .append("as", "status")));
+    pipeline.add(new Document("$unwind", "$status"));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "locations")
+            .append("localField", "locationId")
+            .append("foreignField", "_id")
+            .append("as", "location")));
+    pipeline.add(new Document("$unwind", "$location"));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "issueto")
+            .append("let", new Document("asset_id", "$_id"))
+            .append("pipeline", List.of(
+                new Document("$match", new Document("$expr",
+                    new Document("$and", List.of(
+                        new Document("$eq", List.of("$assetId", "$$asset_id")),
+                        new Document("$ne", List.of("$returnStatus", true))))))))
+            .append("as", "issueInfo")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$issueInfo")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "locations")
+            .append("localField", "issueInfo.locationId")
+            .append("foreignField", "_id")
+            .append("as", "issuedLocation")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$issuedLocation")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "assets")
+            .append("localField", "issueInfo.issuedToAssetId")
+            .append("foreignField", "_id")
+            .append("as", "issuedAsset")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$issuedAsset")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    List<Document> matchConditions = new ArrayList<>();
+
+    if (assetName != null && !assetName.isBlank()) {
+      matchConditions.add(new Document("assetName",
+          new Document("$regex", Pattern.quote(assetName.trim()))
+              .append("$options", "i")));
+    }
+
+    if (assetTagName != null && !assetTagName.isBlank()) {
+      matchConditions.add(new Document("assetTag.assetTagName",
+          new Document("$regex", Pattern.quote(assetTagName.trim()))
+              .append("$options", "i")));
+    }
+
+    if (categoryId != null && !categoryId.isBlank()) {
+      matchConditions.add(new Document("category._id", new ObjectId(categoryId)));
+    }
+
+    if (locationId != null && !locationId.isBlank()) {
+      matchConditions.add(new Document("location._id", new ObjectId(locationId)));
+    }
+
+    if (statusId != null && !statusId.isBlank()) {
+      matchConditions.add(new Document("status._id", new ObjectId(statusId)));
+    }
+
+    if ((purchaseDateFrom != null && !purchaseDateFrom.isBlank())
+        || (purchaseDateTo != null && !purchaseDateTo.isBlank())) {
+      Document purchaseDateMatch = new Document();
+      if (purchaseDateFrom != null && !purchaseDateFrom.isBlank()) {
+        purchaseDateMatch.append("$gte",
+            java.util.Date.from(
+                java.time.LocalDate.parse(purchaseDateFrom.trim())
+                    .atStartOfDay(java.time.ZoneId.systemDefault())
+                    .toInstant()));
+      }
+      if (purchaseDateTo != null && !purchaseDateTo.isBlank()) {
+        purchaseDateMatch.append("$lte",
+            java.util.Date.from(
+                java.time.LocalDate.parse(purchaseDateTo.trim())
+                    .plusDays(1)
+                    .atStartOfDay(java.time.ZoneId.systemDefault())
+                    .minusNanos(1)
+                    .toInstant()));
+      }
+      matchConditions.add(new Document("purchaseDate", purchaseDateMatch));
+    }
+
+    if (!matchConditions.isEmpty()) {
+      pipeline.add(new Document("$match",
+          matchConditions.size() == 1
+              ? matchConditions.get(0)
+              : new Document("$and", matchConditions)));
+    }
+
+    pipeline.add(new Document("$sort", new Document("_id", -1)));
+
+    StringBuilder csv = new StringBuilder();
+    csv.append("Asset ID,Asset Name,Department,Category,Status,Assigned To,Purchase Date,Condition\n");
+
+    for (Document doc : collection.aggregate(pipeline)) {
+      String displayId = doc.getString("displayId");
+      if (displayId == null || displayId.isBlank()) {
+        displayId = doc.getString("assetSerialNumber");
+      }
+      if (displayId == null) {
+        displayId = "";
+      }
+
+      String assetNameVal = doc.getString("assetName");
+      if (assetNameVal == null) {
+        assetNameVal = "";
+      }
+
+      Document locDoc = (Document) doc.get("location");
+      String department = locDoc != null ? locDoc.getString("locationName") : "N/A";
+
+      Document catDoc = (Document) doc.get("category");
+      String category = catDoc != null ? catDoc.getString("categoryName") : "";
+
+      Document statDoc = (Document) doc.get("status");
+      String status = statDoc != null ? statDoc.getString("statusName") : "";
+
+      String issuedTo = "Not Issued";
+      Document issueInfo = (Document) doc.get("issueInfo");
+      if (issueInfo != null) {
+        ObjectId personId = issueInfo.getObjectId("personId");
+        Document issuedLocation = (Document) doc.get("issuedLocation");
+        Document issuedAsset = (Document) doc.get("issuedAsset");
+        if (issuedLocation != null) {
+          issuedTo = issuedLocation.getString("locationName");
+        } else if (issuedAsset != null) {
+          issuedTo = issuedAsset.getString("assetName");
+        } else if (personId != null) {
+          issuedTo = personId.toHexString();
+        }
+      }
+
+      String purchaseDate = formatDateCsv(doc.getDate("purchaseDate"));
+      String condition = "Good";
+
+      csv.append(escapeCsv(displayId)).append(",")
+         .append(escapeCsv(assetNameVal)).append(",")
+         .append(escapeCsv(department)).append(",")
+         .append(escapeCsv(category)).append(",")
+         .append(escapeCsv(status)).append(",")
+         .append(escapeCsv(issuedTo)).append(",")
+         .append(escapeCsv(purchaseDate)).append(",")
+         .append(escapeCsv(condition)).append("\n");
+    }
+
+    return csv.toString();
+  }
+
+  public String exportIssueLogs(
+      String assetName,
+      String category,
+      String issuedTo,
+      String type,
+      String issueDate) {
+
+    LOGGER.info("Exporting issue logs to CSV");
+    MongoCollection<Document> issueCollection = mongoDatabase.getCollection("issueto");
+
+    List<Document> pipeline = new ArrayList<>();
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "assets")
+            .append("localField", "assetId")
+            .append("foreignField", "_id")
+            .append("as", "asset")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$asset")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "assettags")
+            .append("localField", "asset.assetTagId")
+            .append("foreignField", "_id")
+            .append("as", "assetTag")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$assetTag")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "categories")
+            .append("localField", "assetTag.categoryId")
+            .append("foreignField", "_id")
+            .append("as", "categoryDoc")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$categoryDoc")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "locations")
+            .append("localField", "locationId")
+            .append("foreignField", "_id")
+            .append("as", "location")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$location")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "assets")
+            .append("localField", "issuedToAssetId")
+            .append("foreignField", "_id")
+            .append("as", "issuedAsset")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$issuedAsset")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$addFields",
+        new Document("assetName",
+            new Document("$ifNull", Arrays.asList("$asset.assetName", "")))
+            .append("assetCategory",
+                new Document("$ifNull", Arrays.asList("$categoryDoc.categoryName", "")))
+            .append("receiverType",
+                new Document("$switch",
+                    new Document("branches", Arrays.asList(
+                        new Document("case", new Document("$ne", Arrays.asList("$locationId", null)))
+                            .append("then", "Location"),
+                        new Document("case", new Document("$ne", Arrays.asList("$issuedToAssetId", null)))
+                            .append("then", "Asset"),
+                        new Document("case", new Document("$ne", Arrays.asList("$personId", null)))
+                            .append("then", "Person")))
+                        .append("default", "Unknown")))
+            .append("receiverName",
+                new Document("$switch",
+                    new Document("branches", Arrays.asList(
+                        new Document("case", new Document("$ne", Arrays.asList("$locationId", null)))
+                            .append("then", new Document("$ifNull", Arrays.asList("$location.locationName", ""))),
+                        new Document("case", new Document("$ne", Arrays.asList("$issuedToAssetId", null)))
+                            .append("then", new Document("$ifNull", Arrays.asList("$issuedAsset.assetName", ""))),
+                        new Document("case", new Document("$ne", Arrays.asList("$personId", null)))
+                            .append("then", new Document("$toString", "$personId"))))
+                        .append("default", "")))));
+
+    List<Document> matchConditions = new ArrayList<>();
+    matchConditions.add(new Document("returnStatus", new Document("$ne", true)));
+
+    if (assetName != null && !assetName.isBlank()) {
+      matchConditions.add(new Document("assetName",
+          new Document("$regex", Pattern.quote(assetName.trim()))
+              .append("$options", "i")));
+    }
+
+    if (category != null && !category.isBlank()) {
+      matchConditions.add(new Document("assetCategory",
+          new Document("$regex", Pattern.quote(category.trim()))
+              .append("$options", "i")));
+    }
+
+    if (issuedTo != null && !issuedTo.isBlank()) {
+      matchConditions.add(new Document("receiverName",
+          new Document("$regex", Pattern.quote(issuedTo.trim()))
+              .append("$options", "i")));
+    }
+
+    if (type != null && !type.isBlank()) {
+      matchConditions.add(new Document("receiverType", type.trim()));
+    }
+
+    if (issueDate != null && !issueDate.isBlank()) {
+      Date parsedDate = java.util.Date.from(
+          java.time.LocalDate.parse(issueDate.trim())
+              .atStartOfDay(java.time.ZoneId.systemDefault())
+              .toInstant());
+      Date start = parsedDate;
+      Date end = java.util.Date.from(
+          java.time.LocalDate.parse(issueDate.trim())
+              .plusDays(1)
+              .atStartOfDay(java.time.ZoneId.systemDefault())
+              .minusNanos(1)
+              .toInstant());
+      matchConditions.add(new Document("issueDate",
+          new Document("$gte", start).append("$lte", end)));
+    }
+
+    if (!matchConditions.isEmpty()) {
+      pipeline.add(new Document("$match",
+          matchConditions.size() == 1
+              ? matchConditions.get(0)
+              : new Document("$and", matchConditions)));
+    }
+
+    pipeline.add(new Document("$sort", new Document("_id", -1)));
+
+    StringBuilder csv = new StringBuilder();
+    csv.append("Asset Name,Category,Issued To,Type,Issue Date\n");
+
+    for (Document doc : issueCollection.aggregate(pipeline)) {
+      String assetNameVal = doc.getString("assetName");
+      String assetCategory = doc.getString("assetCategory");
+      String receiverName = doc.getString("receiverName");
+      String receiverType = doc.getString("receiverType");
+      String issueDateStr = formatDateCsv(doc.getDate("issueDate"));
+
+      csv.append(escapeCsv(assetNameVal)).append(",")
+         .append(escapeCsv(assetCategory)).append(",")
+         .append(escapeCsv(receiverName)).append(",")
+         .append(escapeCsv(receiverType)).append(",")
+         .append(escapeCsv(issueDateStr)).append("\n");
+    }
+
+    return csv.toString();
+  }
+
+  public String exportReturnLogs(
+      String name,
+      String classification,
+      String total,
+      String returnType,
+      String returnTo,
+      String returnDate) {
+
+    LOGGER.info("Exporting return logs to CSV");
+    MongoCollection<Document> returnCollection = mongoDatabase.getCollection("issueto");
+
+    List<Document> pipeline = new ArrayList<>();
+
+    pipeline.add(new Document("$match", new Document("returnStatus", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "assets")
+            .append("localField", "assetId")
+            .append("foreignField", "_id")
+            .append("as", "asset")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$asset")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "assettags")
+            .append("localField", "asset.assetTagId")
+            .append("foreignField", "_id")
+            .append("as", "assetTag")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$assetTag")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "categories")
+            .append("localField", "assetTag.categoryId")
+            .append("foreignField", "_id")
+            .append("as", "category")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$category")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "locations")
+            .append("localField", "locationId")
+            .append("foreignField", "_id")
+            .append("as", "location")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$location")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "assets")
+            .append("localField", "issuedToAssetId")
+            .append("foreignField", "_id")
+            .append("as", "returnedAsset")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$returnedAsset")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$addFields",
+        new Document("name", new Document("$ifNull", Arrays.asList("$asset.assetName", "")))
+            .append("classification", new Document("$ifNull", Arrays.asList("$category.categoryName", "")))
+            .append("total", new Document("$ifNull", Arrays.asList("$asset.quantity", 0)))
+            .append("returnType", new Document("$switch",
+                new Document("branches", Arrays.asList(
+                    new Document("case", new Document("$ne", Arrays.asList("$locationId", null))).append("then",
+                        "Location"),
+                    new Document("case", new Document("$ne", Arrays.asList("$issuedToAssetId", null))).append("then",
+                        "Asset"),
+                    new Document("case", new Document("$ne", Arrays.asList("$personId", null))).append("then",
+                        "Person")))
+                    .append("default", "Unknown")))
+            .append("returnTo", new Document("$switch",
+                new Document("branches", Arrays.asList(
+                    new Document("case", new Document("$ne", Arrays.asList("$locationId", null)))
+                        .append("then", new Document("$ifNull", Arrays.asList("$location.locationName", ""))),
+                    new Document("case", new Document("$ne", Arrays.asList("$issuedToAssetId", null)))
+                        .append("then", new Document("$ifNull", Arrays.asList("$returnedAsset.assetName", ""))),
+                    new Document("case", new Document("$ne", Arrays.asList("$personId", null)))
+                        .append("then", new Document("$toString", "$personId"))))
+                    .append("default", "")))
+            .append("returnDateText", new Document("$dateToString",
+                new Document("format", "%Y-%m-%d")
+                    .append("date", "$returnDate")))));
+
+    List<Document> matchConditions = new ArrayList<>();
+
+    if (name != null && !name.isBlank()) {
+      matchConditions.add(new Document("name",
+          new Document("$regex", Pattern.quote(name.trim()))
+              .append("$options", "i")));
+    }
+    if (classification != null && !classification.isBlank()) {
+      matchConditions.add(new Document("classification",
+          new Document("$regex", Pattern.quote(classification.trim()))
+              .append("$options", "i")));
+    }
+    if (total != null && !total.isBlank()) {
+      try {
+        matchConditions.add(new Document("total", Integer.parseInt(total.trim())));
+      } catch (NumberFormatException ignored) {
+      }
+    }
+    if (returnType != null && !returnType.isBlank()) {
+      matchConditions.add(new Document("returnType", returnType.trim()));
+    }
+    if (returnTo != null && !returnTo.isBlank()) {
+      matchConditions.add(new Document("returnTo",
+          new Document("$regex", Pattern.quote(returnTo.trim()))
+              .append("$options", "i")));
+    }
+    if (returnDate != null && !returnDate.isBlank()) {
+      matchConditions.add(new Document("returnDateText",
+          new Document("$regex", Pattern.quote(returnDate.trim()))
+              .append("$options", "i")));
+    }
+    if (!matchConditions.isEmpty()) {
+      pipeline.add(new Document("$match",
+          matchConditions.size() == 1 ? matchConditions.get(0) : new Document("$and", matchConditions)));
+    }
+
+    pipeline.add(new Document("$sort", new Document("returnDate", -1)));
+
+    StringBuilder csv = new StringBuilder();
+    csv.append("Name,Classification,Total,Return Type,Return To,Return Date\n");
+
+    for (Document doc : returnCollection.aggregate(pipeline)) {
+      String nameVal = doc.getString("name");
+      String classificationVal = doc.getString("classification");
+      int totalVal = doc.getInteger("total", 0);
+      String returnTypeVal = doc.getString("returnType");
+      String returnToVal = doc.getString("returnTo");
+      String returnDateStr = formatDateCsv(doc.getDate("returnDate"));
+
+      csv.append(escapeCsv(nameVal)).append(",")
+         .append(escapeCsv(classificationVal)).append(",")
+         .append(totalVal).append(",")
+         .append(escapeCsv(returnTypeVal)).append(",")
+         .append(escapeCsv(returnToVal)).append(",")
+         .append(escapeCsv(returnDateStr)).append("\n");
+    }
+
+    return csv.toString();
+  }
+
+  private String escapeCsv(String value) {
+    if (value == null) {
+      return "";
+    }
+    if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+      return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+    return value;
+  }
 }
+
