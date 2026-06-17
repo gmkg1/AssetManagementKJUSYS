@@ -1477,7 +1477,7 @@ public class AssetsService {
 
   // =========================
   // GET UNITS LIST
-  // =========================
+  @SuppressWarnings("unchecked")
   public JsonArray getUnitsList() {
 
     LOGGER.info("Fetching units of measure list");
@@ -1489,20 +1489,25 @@ public class AssetsService {
 
     for (Document doc : collection.find()) {
       JsonObject unit = new JsonObject()
-          .put("_id",      objectIdToString(doc.getObjectId("_id")))
-          .put("name",     doc.getString("acronym"))   // collection uses acronym as the display value
-          .put("acronym",  doc.getString("acronym"));
+          .put("id",            objectIdToString(doc.getObjectId("_id")))
+          .put("_id",           objectIdToString(doc.getObjectId("_id")))
+          .put("unitOfMeasure", doc.getString("unitOfMeasure"))
+          .put("acronym",       doc.getString("acronym"))
+          .put("name",          doc.getString("unitOfMeasure")); // fallback
 
       // include child units if present
-      List<Document> children = (List<Document>) doc.get("childUnits");
-      if (children != null && !children.isEmpty()) {
+      List<Document> hierarchy = (List<Document>) doc.get("hierarchy");
+      if (hierarchy != null && !hierarchy.isEmpty()) {
         JsonArray childArray = new JsonArray();
-        for (Document child : children) {
+        for (Document child : hierarchy) {
           childArray.add(new JsonObject()
-              .put("_id",     objectIdToString(child.getObjectId("_id")))
-              .put("name",    child.getString("name"))
-              .put("acronym", child.getString("acronym")));
+              .put("childNode",        child.getString("childNode"))
+              .put("childNodeName",    child.getString("childNodeName"))
+              .put("acronym",          child.getString("childNode"))
+              .put("name",             child.getString("childNodeName"))
+              .put("conversionFactor", child.getInteger("conversionFactor")));
         }
+        unit.put("hierarchy", childArray);
         unit.put("childUnits", childArray);
       }
 
@@ -1574,7 +1579,31 @@ public class AssetsService {
       campusId = new ObjectId("6a101a50df52662f6e441530");
     }
 
-    ObjectId unitOfMeasureId = new ObjectId("6a1533d11fcf30c131441533");
+    ObjectId unitOfMeasureId = null;
+    String unitOfMeasureIdStr = payload.getString("unitOfMeasureId");
+    if (unitOfMeasureIdStr == null || unitOfMeasureIdStr.isBlank()) {
+      unitOfMeasureIdStr = payload.getString("unitOfMeasure");
+      if (unitOfMeasureIdStr == null || unitOfMeasureIdStr.isBlank()) {
+        unitOfMeasureIdStr = payload.getString("unitId");
+      }
+    }
+    if (unitOfMeasureIdStr != null && !unitOfMeasureIdStr.isBlank() && ObjectId.isValid(unitOfMeasureIdStr.trim())) {
+      unitOfMeasureId = new ObjectId(unitOfMeasureIdStr.trim());
+    } else {
+      unitOfMeasureId = new ObjectId("6a1533d11fcf30c131441533");
+    }
+
+    int quantityVal = 1;
+    if (payload.containsKey("quantity")) {
+      Object q = payload.getValue("quantity");
+      if (q instanceof Number) {
+        quantityVal = ((Number) q).intValue();
+      } else if (q instanceof String) {
+        try {
+          quantityVal = Integer.parseInt(((String) q).trim());
+        } catch (NumberFormatException ignored) {}
+      }
+    }
 
     int costVal = 0;
     if (purchaseCost != null && !purchaseCost.isBlank()) {
@@ -1611,7 +1640,7 @@ public class AssetsService {
         .append("purchaseCost", costVal)
         .append("purchaseDate", dateVal)
         .append("isIssuable", isReturnable)
-        .append("quantity", 1)
+        .append("quantity", quantityVal)
         .append("campusId", campusId)
         .append("blockId", "B002")
         .append("unitOfMeasureId", unitOfMeasureId);
@@ -1706,6 +1735,31 @@ public class AssetsService {
     if (serial != null)
       updateFields.append("assetSerialNumber", serial.trim());
     updateFields.append("isIssuable", isReturnable);
+
+    int quantityVal = 1;
+    if (payload.containsKey("quantity")) {
+      Object q = payload.getValue("quantity");
+      if (q instanceof Number) {
+        quantityVal = ((Number) q).intValue();
+      } else if (q instanceof String) {
+        try {
+          quantityVal = Integer.parseInt(((String) q).trim());
+        } catch (NumberFormatException ignored) {}
+      }
+      updateFields.append("quantity", quantityVal);
+    }
+
+    String unitOfMeasureIdStr = payload.getString("unitOfMeasureId");
+    if (unitOfMeasureIdStr == null || unitOfMeasureIdStr.isBlank()) {
+      unitOfMeasureIdStr = payload.getString("unitOfMeasure");
+      if (unitOfMeasureIdStr == null || unitOfMeasureIdStr.isBlank()) {
+        unitOfMeasureIdStr = payload.getString("unitId");
+      }
+    }
+    if (unitOfMeasureIdStr != null && !unitOfMeasureIdStr.isBlank() && ObjectId.isValid(unitOfMeasureIdStr.trim())) {
+      ObjectId unitOfMeasureId = new ObjectId(unitOfMeasureIdStr.trim());
+      updateFields.append("unitOfMeasureId", unitOfMeasureId);
+    }
 
     if (purchaseCost != null) {
       int costVal = 0;

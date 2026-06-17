@@ -1,10 +1,7 @@
 in\edu\kristujayanti\handlers\GetAssetTagsListHandler.class
 in\edu\kristujayanti\handlers\GetUnissuedAssetNamesHandler.class
-<<<<<<< HEAD
 in\edu\kristujayanti\handlers\GetUnitsListHandler.class
-=======
 in\edu\kristujayanti\handlers\GroupedReportsHandler.class
->>>>>>> 32a6f1d4a85d4bfd2880010e40c64c5b725d3aa8
 in\edu\kristujayanti\router\MicroserviceRouter.class
 in\edu\kristujayanti\handlers\GetCategoriesListHandler.class
 in\edu\kristujayanti\handlers\HealthHandler.class
