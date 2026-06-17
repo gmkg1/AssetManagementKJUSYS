@@ -1,5 +1,6 @@
 in\edu\kristujayanti\handlers\GetAssetTagsListHandler.class
 in\edu\kristujayanti\handlers\GetUnissuedAssetNamesHandler.class
+in\edu\kristujayanti\handlers\GetUnitsListHandler.class
 in\edu\kristujayanti\router\MicroserviceRouter.class
 in\edu\kristujayanti\handlers\GetCategoriesListHandler.class
 in\edu\kristujayanti\handlers\HealthHandler.class

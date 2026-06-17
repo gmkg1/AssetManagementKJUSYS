@@ -1475,6 +1475,43 @@ public class AssetsService {
         .put("displayId", asset.getString("displayId"));
   }
 
+  // =========================
+  // GET UNITS LIST
+  // =========================
+  public JsonArray getUnitsList() {
+
+    LOGGER.info("Fetching units of measure list");
+
+    JsonArray result = new JsonArray();
+
+    MongoCollection<Document> collection =
+        mongoDatabase.getCollection("units");
+
+    for (Document doc : collection.find()) {
+      JsonObject unit = new JsonObject()
+          .put("_id",      objectIdToString(doc.getObjectId("_id")))
+          .put("name",     doc.getString("acronym"))   // collection uses acronym as the display value
+          .put("acronym",  doc.getString("acronym"));
+
+      // include child units if present
+      List<Document> children = (List<Document>) doc.get("childUnits");
+      if (children != null && !children.isEmpty()) {
+        JsonArray childArray = new JsonArray();
+        for (Document child : children) {
+          childArray.add(new JsonObject()
+              .put("_id",     objectIdToString(child.getObjectId("_id")))
+              .put("name",    child.getString("name"))
+              .put("acronym", child.getString("acronym")));
+        }
+        unit.put("childUnits", childArray);
+      }
+
+      result.add(unit);
+    }
+
+    return result;
+  }
+
   private String objectIdToString(ObjectId objectId) {
     return objectId == null ? null : objectId.toHexString();
   }

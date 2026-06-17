@@ -183,6 +183,11 @@ public class MicroserviceRouter extends RouterBase {
         HttpMethod.GET,
         MicroserviceRoutingURLNames.GET_ASSET_HISTORY,
         new GetAssetHistoryHandler(assetsService));
+
+    addRoute(
+        HttpMethod.GET,
+        MicroserviceRoutingURLNames.UNITS_LIST,
+        new GetUnitsListHandler(assetsService));
   }
 
   /**
