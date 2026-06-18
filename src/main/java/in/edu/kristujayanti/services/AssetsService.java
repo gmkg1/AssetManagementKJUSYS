@@ -99,11 +99,51 @@ public class AssetsService {
 
     MongoCollection<Document> collection = mongoDatabase.getCollection("issueto");
 
+    // Fetch the asset details
+    MongoCollection<Document> assetsColl = mongoDatabase.getCollection("assets");
+    Document assetDoc = assetsColl.find(new Document("_id", new ObjectId(assetId.trim()))).first();
+    if (assetDoc == null) {
+      throw new IllegalArgumentException("Asset not found");
+    }
+
+    double availableQty = getQuantityDouble(assetDoc);
+    double conversionFactor = 1.0;
+    if (payload.containsKey("conversionFactor")) {
+      Object cf = payload.getValue("conversionFactor");
+      if (cf instanceof Number) {
+        conversionFactor = ((Number) cf).doubleValue();
+      }
+    }
+    double issueQuantityVal = 1.0;
+    if (payload.containsKey("issueQuantity")) {
+      Object iq = payload.getValue("issueQuantity");
+      if (iq instanceof Number) {
+        issueQuantityVal = ((Number) iq).doubleValue();
+      } else if (iq instanceof String) {
+        try {
+          issueQuantityVal = Double.parseDouble(((String) iq).trim());
+        } catch (NumberFormatException ignored) {}
+      }
+    }
+
+    if (issueQuantityVal <= 0) {
+      throw new IllegalArgumentException("Issue quantity must be greater than 0");
+    }
+
+    double baseIssueQuantity = issueQuantityVal / conversionFactor;
+
+    if (baseIssueQuantity > availableQty) {
+      throw new IllegalArgumentException("Insufficient quantity available");
+    }
+
     // 1. Rule validation: No asset should have multiple active outgoing assignments
-    Document activeQuery = new Document("assetId", new ObjectId(assetId.trim()))
-        .append("returnStatus", false);
-    if (collection.find(activeQuery).first() != null) {
-      throw new IllegalArgumentException("Asset is already actively assigned and must be returned first");
+    // For serialized assets (available quantity <= 1), preserve the active assignment check
+    if (availableQty <= 1) {
+      Document activeQuery = new Document("assetId", new ObjectId(assetId.trim()))
+          .append("returnStatus", false);
+      if (collection.find(activeQuery).first() != null) {
+        throw new IllegalArgumentException("Asset is already actively assigned and must be returned first");
+      }
     }
 
     // 2. Rule validation: Depth-agnostic circular assignment loop prevention
@@ -123,6 +163,26 @@ public class AssetsService {
       }
     }
 
+    // Deduct quantity from the asset
+    assetsColl.updateOne(
+        new Document("_id", new ObjectId(assetId.trim())),
+        new Document("$set", new Document("quantity", toQuantityNumber(availableQty - baseIssueQuantity)))
+    );
+
+    // Resolve unit details
+    ObjectId assetUnitOfMeasureId = assetDoc.getObjectId("unitOfMeasureId");
+    String unitOfMeasurement = payload.getString("unitOfMeasurement");
+    if (unitOfMeasurement == null || unitOfMeasurement.isBlank()) {
+      unitOfMeasurement = "pieces";
+      if (assetUnitOfMeasureId != null) {
+        MongoCollection<Document> unitsCollection = mongoDatabase.getCollection("units");
+        Document unitDoc = unitsCollection.find(new Document("_id", assetUnitOfMeasureId)).first();
+        if (unitDoc != null) {
+          unitOfMeasurement = unitDoc.getString("acronym") != null ? unitDoc.getString("acronym") : unitDoc.getString("unitOfMeasure");
+        }
+      }
+    }
+
     Document issueDocument = new Document("assetId", new ObjectId(assetId.trim()))
         .append("issueDate", parseIssueDate(issueDate))
         .append("locationId", toObjectIdOrNull(locationId))
@@ -130,7 +190,13 @@ public class AssetsService {
         .append("issuedToAssetId", toObjectIdOrNull(issuedToAssetId))
         .append("ActiveStatus", true)
         .append("returnStatus", false)
-        .append("returnDate", null);
+        .append("returnDate", null)
+        .append("quantity", toQuantityNumber(availableQty))
+        .append("unitOfMeasurement", unitOfMeasurement)
+        .append("issueQuantity", toQuantityNumber(issueQuantityVal))
+        .append("issueUnitId", assetUnitOfMeasureId != null ? assetUnitOfMeasureId : new ObjectId("000000000000000000000000"))
+        .append("conversionFactor", toQuantityNumber(conversionFactor))
+        .append("returnedQuantity", 0);
 
     collection = mongoDatabase.getCollection("issueto");
 
@@ -401,7 +467,7 @@ public class AssetsService {
           json.put("purchaseCost", doc.getInteger("purchaseCost"));
           json.put("purchaseDate", dateToString(doc.getDate("purchaseDate")));
           json.put("isIssuable", doc.getBoolean("isIssuable"));
-          json.put("quantity", doc.getInteger("quantity"));
+           json.put("quantity", getQuantityNumber(doc));
 
           String tagLabel = "N/A";
           Document tagDoc = (Document) doc.get("assetTag");
@@ -574,7 +640,7 @@ public class AssetsService {
           .put("categoryName",
               doc.getString("categoryName"))
           .put("assetCount",
-              doc.getInteger("assetCount"));
+              getNumberField(doc, "assetCount", 0));
 
       result.add(json);
     }
@@ -619,7 +685,7 @@ public class AssetsService {
           .put("statusName",
               doc.getString("statusName"))
           .put("assetCount",
-              doc.getInteger("assetCount"));
+              getNumberField(doc, "assetCount", 0));
 
       result.add(json);
     }
@@ -654,6 +720,16 @@ public class AssetsService {
 
     pipeline.add(new Document("$unwind",
         new Document("path", "$asset")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "units")
+            .append("localField", "asset.unitOfMeasureId")
+            .append("foreignField", "_id")
+            .append("as", "unitDoc")));
+
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$unitDoc")
             .append("preserveNullAndEmptyArrays", true)));
 
     pipeline.add(new Document("$lookup",
@@ -807,6 +883,20 @@ public class AssetsService {
       Document categoryDoc = (Document) issueDoc.get("categoryDoc");
       Document locationDoc = (Document) issueDoc.get("location");
       Document issuedAssetDoc = (Document) issueDoc.get("issuedAsset");
+      Document unitDoc = (Document) issueDoc.get("unitDoc");
+
+      String unitVal = issueDoc.getString("unitOfMeasurement");
+      if (unitVal == null || unitVal.isBlank()) {
+        if (unitDoc != null) {
+          unitVal = unitDoc.getString("acronym") != null ? unitDoc.getString("acronym") : unitDoc.getString("unitOfMeasure");
+        } else {
+          unitVal = "Nos";
+        }
+      }
+      Number issueQtyVal = getNumberField(issueDoc, "issueQuantity", null);
+      if (issueQtyVal == null) {
+        issueQtyVal = getNumberField(issueDoc, "quantity", 1);
+      }
 
       if (assetDoc != null) {
         json.put("assetName", assetDoc.getString("assetName"));
@@ -838,6 +928,9 @@ public class AssetsService {
       json.put("locationId", objectIdToString(issueDoc.getObjectId("locationId")));
       json.put("personId", objectIdToString(issueDoc.getObjectId("personId")));
       json.put("issuedToAssetId", objectIdToString(issueDoc.getObjectId("issuedToAssetId")));
+      json.put("issueQuantity", issueQtyVal);
+      json.put("unit", unitVal);
+      json.put("returnedQuantity", getNumberField(issueDoc, "returnedQuantity", 0));
 
       result.add(json);
     }
@@ -1005,34 +1098,22 @@ public class AssetsService {
                         "categoryName"))
                 .put(
                     "totalAssets",
-                    doc.getInteger(
-                        "totalAssets",
-                        0))
+                    getNumberField(doc, "totalAssets", 0))
                 .put(
                     "ready",
-                    doc.getInteger(
-                        "ready",
-                        0))
+                    getNumberField(doc, "ready", 0))
                 .put(
                     "deployed",
-                    doc.getInteger(
-                        "deployed",
-                        0))
+                    getNumberField(doc, "deployed", 0))
                 .put(
                     "deadStock",
-                    doc.getInteger(
-                        "deadStock",
-                        0))
+                    getNumberField(doc, "deadStock", 0))
                 .put(
                     "underMaintenance",
-                    doc.getInteger(
-                        "underMaintenance",
-                        0))
+                    getNumberField(doc, "underMaintenance", 0))
                 .put(
                     "damaged",
-                    doc.getInteger(
-                        "damaged",
-                        0)));
+                    getNumberField(doc, "damaged", 0)));
       }
     }
 
@@ -1172,7 +1253,7 @@ public class AssetsService {
                 .put("purchaseCost",
                     doc.getInteger("purchaseCost"))
                 .put("quantity",
-                    doc.getInteger("quantity"))
+                    getQuantityNumber(doc))
                 .put("isIssuable",
                     doc.getBoolean("isIssuable")));
       }
@@ -1229,7 +1310,11 @@ public class AssetsService {
 
     List<Document> pipeline = new ArrayList<>();
 
-    pipeline.add(new Document("$match", new Document("returnStatus", true)));
+    List<Document> orConditions = List.of(
+        new Document("returnStatus", true),
+        new Document("returnedQuantity", new Document("$gt", 0))
+    );
+    pipeline.add(new Document("$match", new Document("$or", orConditions)));
 
     pipeline.add(new Document("$lookup",
         new Document("from", "assets")
@@ -1239,6 +1324,16 @@ public class AssetsService {
 
     pipeline.add(new Document("$unwind",
         new Document("path", "$asset")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "units")
+            .append("localField", "asset.unitOfMeasureId")
+            .append("foreignField", "_id")
+            .append("as", "unitDoc")));
+
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$unitDoc")
             .append("preserveNullAndEmptyArrays", true)));
 
     pipeline.add(new Document("$lookup",
@@ -1284,7 +1379,7 @@ public class AssetsService {
     pipeline.add(new Document("$addFields",
         new Document("name", new Document("$ifNull", Arrays.asList("$asset.assetName", "")))
             .append("classification", new Document("$ifNull", Arrays.asList("$category.categoryName", "")))
-            .append("total", new Document("$ifNull", Arrays.asList("$asset.quantity", 0)))
+            .append("total", new Document("$ifNull", Arrays.asList("$returnedQuantity", new Document("$ifNull", Arrays.asList("$asset.quantity", 1)))))
             .append("returnType", new Document("$switch",
                 new Document("branches", Arrays.asList(
                     new Document("case", new Document("$ne", Arrays.asList("$locationId", null))).append("then",
@@ -1374,12 +1469,22 @@ public class AssetsService {
       List<Document> data = (List<Document>) facetResult.get("data");
 
       for (Document doc : data) {
+        Document unitDoc = (Document) doc.get("unitDoc");
+        String unitVal = doc.getString("unitOfMeasurement");
+        if (unitVal == null || unitVal.isBlank()) {
+          if (unitDoc != null) {
+            unitVal = unitDoc.getString("acronym") != null ? unitDoc.getString("acronym") : unitDoc.getString("unitOfMeasure");
+          } else {
+            unitVal = "Nos";
+          }
+        }
 
         result.add(
             new JsonObject()
                 .put("name", doc.getString("name"))
                 .put("classification", doc.getString("classification"))
-                .put("total", doc.getInteger("total", 0))
+                .put("total", getNumberField(doc, "total", 0))
+                .put("unit", unitVal)
                 .put("returnType", doc.getString("returnType"))
                 .put("returnTo", doc.getString("returnTo"))
                 .put("returnDate", doc.getDate("returnDate") != null
@@ -1427,18 +1532,38 @@ public class AssetsService {
         new Document("path", "$assetTag")
             .append("preserveNullAndEmptyArrays", true)));
 
+    pipeline.add(new Document("$lookup",
+        new Document("from", "units")
+            .append("localField", "unitOfMeasureId")
+            .append("foreignField", "_id")
+            .append("as", "unitDoc")));
+
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$unitDoc")
+            .append("preserveNullAndEmptyArrays", true)));
+
     pipeline.add(new Document("$limit", 20));
 
     for (Document doc : collection.aggregate(pipeline)) {
       Document assetTag = (Document) doc.get("assetTag");
       String tagLabel = assetTag != null ? assetTag.getString("assetTagName") : "";
+      
+      Document unitDoc = (Document) doc.get("unitDoc");
+      String unitName = "Nos";
+      if (unitDoc != null) {
+        unitName = unitDoc.getString("acronym") != null ? unitDoc.getString("acronym") : unitDoc.getString("unitOfMeasure");
+      }
+
       result.add(new JsonObject()
           .put("_id", objectIdToString(doc.getObjectId("_id")))
           .put("assetName", doc.getString("assetName"))
           .put("assetTagName", tagLabel)
           .put("assetSerialNumber",
               doc.getString("assetSerialNumber") != null ? doc.getString("assetSerialNumber") : "")
-          .put("isIssuable", doc.getBoolean("isIssuable")));
+          .put("isIssuable", doc.getBoolean("isIssuable"))
+          .put("quantity", getQuantityNumber(doc))
+          .put("unitOfMeasure", unitName)
+          .put("unitOfMeasureId", objectIdToString(doc.getObjectId("unitOfMeasureId"))));
     }
     return result;
   }
@@ -1466,7 +1591,7 @@ public class AssetsService {
         .put("assetName", asset.getString("assetName"))
         .put("assetTagId", objectIdToString(assetTagId))
         .put("categoryId", categoryId)
-        .put("quantity", asset.getInteger("quantity"))
+        .put("quantity", getQuantityNumber(asset))
         .put("unitOfMeasureId", objectIdToString(asset.getObjectId("unitOfMeasureId")))
         .put("campusId", objectIdToString(asset.getObjectId("campusId")))
         .put("blockId", asset.getString("blockId"))
@@ -1841,18 +1966,59 @@ public class AssetsService {
       throw new IllegalArgumentException("Issue record not found with id: " + issuetoId);
     }
 
+    double returnQuantityVal = 1.0;
+    if (payload.containsKey("returnQuantity")) {
+      Object rq = payload.getValue("returnQuantity");
+      if (rq instanceof Number) {
+        returnQuantityVal = ((Number) rq).doubleValue();
+      } else if (rq instanceof String) {
+        try {
+          returnQuantityVal = Double.parseDouble(((String) rq).trim());
+        } catch (NumberFormatException ignored) {}
+      }
+    }
+
+    if (returnQuantityVal <= 0) {
+      throw new IllegalArgumentException("Return quantity must be greater than 0");
+    }
+
+    double issueQuantityVal = originalIssue.containsKey("issueQuantity") ? ((Number) originalIssue.get("issueQuantity")).doubleValue() : 1.0;
+    double alreadyReturned = originalIssue.containsKey("returnedQuantity") ? ((Number) originalIssue.get("returnedQuantity")).doubleValue() : 0.0;
+
+    if (alreadyReturned + returnQuantityVal > issueQuantityVal) {
+      throw new IllegalArgumentException("Return quantity exceeds remaining issued quantity");
+    }
+
     Date returnDateVal = parseIssueDate(returnDate);
 
+    double newReturned = alreadyReturned + returnQuantityVal;
     Document updateFields = new Document()
-        .append("ActiveStatus", false)
-        .append("returnStatus", true)
+        .append("returnedQuantity", toQuantityNumber(newReturned))
         .append("returnDate", returnDateVal);
+
+    if (newReturned >= issueQuantityVal - 0.0001) {
+      updateFields.append("ActiveStatus", false)
+                  .append("returnStatus", true);
+    }
 
     if (notes != null) {
       updateFields.append("notes", notes.trim());
     }
 
     collection.updateOne(new Document("_id", issueObjectId), new Document("$set", updateFields));
+
+    // Restore quantity in the assets collection
+    MongoCollection<Document> assetsColl = mongoDatabase.getCollection("assets");
+    Document assetDoc = assetsColl.find(new Document("_id", new ObjectId(assetId.trim()))).first();
+    if (assetDoc != null) {
+      double conversionFactor = originalIssue.containsKey("conversionFactor") ? ((Number) originalIssue.get("conversionFactor")).doubleValue() : 1.0;
+      double baseReturnQuantity = returnQuantityVal / conversionFactor;
+      double currentQty = getQuantityDouble(assetDoc);
+      assetsColl.updateOne(
+          new Document("_id", new ObjectId(assetId.trim())),
+          new Document("$set", new Document("quantity", toQuantityNumber(currentQty + baseReturnQuantity)))
+      );
+    }
 
     return new JsonObject()
         .put("message", "Asset returned successfully")
@@ -2224,8 +2390,18 @@ public class AssetsService {
                         new Document("$ne", List.of("$returnStatus", true))))))))
             .append("as", "activeIssues")));
 
-    // Match assets where activeIssues is empty (not issued)
-    pipeline.add(new Document("$match", new Document("activeIssues", new Document("$size", 0))));
+    // Match assets where remaining quantity > 1 (bulk asset) OR (remaining quantity > 0 and no active issues)
+    pipeline.add(new Document("$match", new Document("$or", List.of(
+        new Document("quantity", new Document("$gt", 1)),
+        new Document("$and", List.of(
+            new Document("quantity", new Document("$gt", 0)),
+            new Document("activeIssues", new Document("$size", 0))
+        )),
+        new Document("$and", List.of(
+            new Document("quantity", new Document("$exists", false)),
+            new Document("activeIssues", new Document("$size", 0))
+        ))
+    ))));
 
     // Sort alphabetically by assetName
     pipeline.add(new Document("$sort", new Document("assetName", 1)));
@@ -2439,12 +2615,12 @@ public class AssetsService {
               .put("displayId", displayId != null ? displayId : "")
               .put("name", doc.getString("assetTagName"))
               .put("categoryName", doc.getString("categoryName") != null ? doc.getString("categoryName") : "")
-              .put("total", doc.getInteger("total", 0))
-              .put("ready", doc.getInteger("ready", 0))
-              .put("deployed", doc.getInteger("deployed", 0))
-              .put("deadStock", doc.getInteger("deadStock", 0))
-              .put("service", doc.getInteger("service", 0))
-              .put("eol", doc.getInteger("eol", 0)));
+              .put("total", getNumberField(doc, "total", 0))
+              .put("ready", getNumberField(doc, "ready", 0))
+              .put("deployed", getNumberField(doc, "deployed", 0))
+              .put("deadStock", getNumberField(doc, "deadStock", 0))
+              .put("service", getNumberField(doc, "service", 0))
+              .put("eol", getNumberField(doc, "eol", 0)));
         }
       }
     }
@@ -2493,12 +2669,12 @@ public class AssetsService {
       csv.append(escapeCsv(displayId)).append(",")
          .append(escapeCsv(name)).append(",")
          .append(escapeCsv(category)).append(",")
-         .append(doc.getInteger("total", 0)).append(",")
-         .append(doc.getInteger("ready", 0)).append(",")
-         .append(doc.getInteger("deployed", 0)).append(",")
-         .append(doc.getInteger("deadStock", 0)).append(",")
-         .append(doc.getInteger("service", 0)).append(",")
-         .append(doc.getInteger("eol", 0)).append("\n");
+         .append(getNumberField(doc, "total", 0)).append(",")
+         .append(getNumberField(doc, "ready", 0)).append(",")
+         .append(getNumberField(doc, "deployed", 0)).append(",")
+         .append(getNumberField(doc, "deadStock", 0)).append(",")
+         .append(getNumberField(doc, "service", 0)).append(",")
+         .append(getNumberField(doc, "eol", 0)).append("\n");
     }
 
     return csv.toString();
@@ -2728,6 +2904,16 @@ public class AssetsService {
             .append("preserveNullAndEmptyArrays", true)));
 
     pipeline.add(new Document("$lookup",
+        new Document("from", "units")
+            .append("localField", "asset.unitOfMeasureId")
+            .append("foreignField", "_id")
+            .append("as", "unitDoc")));
+
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$unitDoc")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
         new Document("from", "assettags")
             .append("localField", "asset.assetTagId")
             .append("foreignField", "_id")
@@ -2840,7 +3026,7 @@ public class AssetsService {
     pipeline.add(new Document("$sort", new Document("_id", -1)));
 
     StringBuilder csv = new StringBuilder();
-    csv.append("Asset Name,Category,Issued To,Type,Issue Date\n");
+    csv.append("Asset Name,Category,Issued To,Type,Issue Date,Issued Quantity,Unit\n");
 
     for (Document doc : issueCollection.aggregate(pipeline)) {
       String assetNameVal = doc.getString("assetName");
@@ -2849,11 +3035,27 @@ public class AssetsService {
       String receiverType = doc.getString("receiverType");
       String issueDateStr = formatDateCsv(doc.getDate("issueDate"));
 
+      Document unitDoc = (Document) doc.get("unitDoc");
+      String unitVal = doc.getString("unitOfMeasurement");
+      if (unitVal == null || unitVal.isBlank()) {
+        if (unitDoc != null) {
+          unitVal = unitDoc.getString("acronym") != null ? unitDoc.getString("acronym") : unitDoc.getString("unitOfMeasure");
+        } else {
+          unitVal = "Nos";
+        }
+      }
+      Number issueQtyVal = getNumberField(doc, "issueQuantity", null);
+      if (issueQtyVal == null) {
+        issueQtyVal = getNumberField(doc, "quantity", 1);
+      }
+
       csv.append(escapeCsv(assetNameVal)).append(",")
          .append(escapeCsv(assetCategory)).append(",")
          .append(escapeCsv(receiverName)).append(",")
          .append(escapeCsv(receiverType)).append(",")
-         .append(escapeCsv(issueDateStr)).append("\n");
+         .append(escapeCsv(issueDateStr)).append(",")
+         .append(issueQtyVal).append(",")
+         .append(escapeCsv(unitVal)).append("\n");
     }
 
     return csv.toString();
@@ -2872,7 +3074,11 @@ public class AssetsService {
 
     List<Document> pipeline = new ArrayList<>();
 
-    pipeline.add(new Document("$match", new Document("returnStatus", true)));
+    List<Document> orConditions = List.of(
+        new Document("returnStatus", true),
+        new Document("returnedQuantity", new Document("$gt", 0))
+    );
+    pipeline.add(new Document("$match", new Document("$or", orConditions)));
 
     pipeline.add(new Document("$lookup",
         new Document("from", "assets")
@@ -2881,6 +3087,15 @@ public class AssetsService {
             .append("as", "asset")));
     pipeline.add(new Document("$unwind",
         new Document("path", "$asset")
+            .append("preserveNullAndEmptyArrays", true)));
+
+    pipeline.add(new Document("$lookup",
+        new Document("from", "units")
+            .append("localField", "asset.unitOfMeasureId")
+            .append("foreignField", "_id")
+            .append("as", "unitDoc")));
+    pipeline.add(new Document("$unwind",
+        new Document("path", "$unitDoc")
             .append("preserveNullAndEmptyArrays", true)));
 
     pipeline.add(new Document("$lookup",
@@ -2922,7 +3137,7 @@ public class AssetsService {
     pipeline.add(new Document("$addFields",
         new Document("name", new Document("$ifNull", Arrays.asList("$asset.assetName", "")))
             .append("classification", new Document("$ifNull", Arrays.asList("$category.categoryName", "")))
-            .append("total", new Document("$ifNull", Arrays.asList("$asset.quantity", 0)))
+            .append("total", new Document("$ifNull", Arrays.asList("$returnedQuantity", new Document("$ifNull", Arrays.asList("$asset.quantity", 1)))))
             .append("returnType", new Document("$switch",
                 new Document("branches", Arrays.asList(
                     new Document("case", new Document("$ne", Arrays.asList("$locationId", null))).append("then",
@@ -2984,19 +3199,30 @@ public class AssetsService {
     pipeline.add(new Document("$sort", new Document("returnDate", -1)));
 
     StringBuilder csv = new StringBuilder();
-    csv.append("Name,Classification,Total,Return Type,Return To,Return Date\n");
+    csv.append("Name,Classification,Total,Unit,Return Type,Return To,Return Date\n");
 
     for (Document doc : returnCollection.aggregate(pipeline)) {
       String nameVal = doc.getString("name");
       String classificationVal = doc.getString("classification");
-      int totalVal = doc.getInteger("total", 0);
+      Number totalVal = getNumberField(doc, "total", 0);
       String returnTypeVal = doc.getString("returnType");
       String returnToVal = doc.getString("returnTo");
       String returnDateStr = formatDateCsv(doc.getDate("returnDate"));
 
+      Document unitDoc = (Document) doc.get("unitDoc");
+      String unitVal = doc.getString("unitOfMeasurement");
+      if (unitVal == null || unitVal.isBlank()) {
+        if (unitDoc != null) {
+          unitVal = unitDoc.getString("acronym") != null ? unitDoc.getString("acronym") : unitDoc.getString("unitOfMeasure");
+        } else {
+          unitVal = "Nos";
+        }
+      }
+
       csv.append(escapeCsv(nameVal)).append(",")
          .append(escapeCsv(classificationVal)).append(",")
          .append(totalVal).append(",")
+         .append(escapeCsv(unitVal)).append(",")
          .append(escapeCsv(returnTypeVal)).append(",")
          .append(escapeCsv(returnToVal)).append(",")
          .append(escapeCsv(returnDateStr)).append("\n");
@@ -3013,6 +3239,57 @@ public class AssetsService {
       return "\"" + value.replace("\"", "\"\"") + "\"";
     }
     return value;
+  }
+
+  private double getQuantityDouble(Document doc) {
+    if (doc == null) return 0.0;
+    Object q = doc.get("quantity");
+    if (q instanceof Number) {
+      return ((Number) q).doubleValue();
+    }
+    return 0.0;
+  }
+
+  private Number getQuantityNumber(Document doc) {
+    if (doc == null) return 0;
+    Object q = doc.get("quantity");
+    if (q instanceof Number) {
+      double d = ((Number) q).doubleValue();
+      if (d == Math.floor(d)) {
+        return (int) d;
+      }
+      return d;
+    }
+    return 0;
+  }
+
+  private Number toQuantityNumber(double val) {
+    if (val == Math.floor(val)) {
+      return (int) val;
+    }
+    return val;
+  }
+
+  private double getDoubleField(Document doc, String field, double defaultVal) {
+    if (doc == null || field == null) return defaultVal;
+    Object val = doc.get(field);
+    if (val instanceof Number) {
+      return ((Number) val).doubleValue();
+    }
+    return defaultVal;
+  }
+
+  private Number getNumberField(Document doc, String field, Number defaultVal) {
+    if (doc == null || field == null) return defaultVal;
+    Object val = doc.get(field);
+    if (val instanceof Number) {
+      double d = ((Number) val).doubleValue();
+      if (d == Math.floor(d)) {
+        return (int) d;
+      }
+      return d;
+    }
+    return defaultVal;
   }
 }
 
