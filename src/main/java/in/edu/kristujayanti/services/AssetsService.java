@@ -163,10 +163,16 @@ public class AssetsService {
       }
     }
 
-    // Deduct quantity from the asset
+    // Deduct quantity from the asset and set status to Deployed
+    Document updateAssetDoc = new Document("quantity", toQuantityNumber(availableQty - baseIssueQuantity));
+    Document deployedStatusDoc = mongoDatabase.getCollection("status")
+        .find(new Document("statusName", "Deployed")).first();
+    if (deployedStatusDoc != null) {
+      updateAssetDoc.append("statusId", deployedStatusDoc.getObjectId("_id"));
+    }
     assetsColl.updateOne(
         new Document("_id", new ObjectId(assetId.trim())),
-        new Document("$set", new Document("quantity", toQuantityNumber(availableQty - baseIssueQuantity)))
+        new Document("$set", updateAssetDoc)
     );
 
     // Resolve unit details
@@ -231,128 +237,28 @@ public class AssetsService {
 
     int skip = (page - 1) * pageSize;
 
-    List<Document> pipeline = new ArrayList<>();
-
-    // =========================
-    // JOIN ASSET TAG
-    // =========================
-    pipeline.add(
-        new Document("$lookup",
-            new Document("from", "assettags")
-                .append("localField", "assetTagId")
-                .append("foreignField", "_id")
-                .append("as", "assetTag")));
-
-    pipeline.add(
-        new Document("$unwind", "$assetTag"));
-
-    // =========================
-    // JOIN CATEGORY
-    // =========================
-    pipeline.add(
-        new Document("$lookup",
-            new Document("from", "categories")
-                .append("localField", "assetTag.categoryId")
-                .append("foreignField", "_id")
-                .append("as", "category")));
-
-    pipeline.add(
-        new Document("$unwind", "$category"));
-
-    // =========================
-    // JOIN CAMPUS
-    // =========================
-    pipeline.add(
-        new Document("$lookup",
-            new Document("from", "campuses")
-                .append("localField", "campusId")
-                .append("foreignField", "_id")
-                .append("as", "campus")));
-
-    pipeline.add(
-        new Document("$unwind", "$campus"));
-
-    // =========================
-    // JOIN STATUS
-    // =========================
-    pipeline.add(
-        new Document("$lookup",
-            new Document("from", "status")
-                .append("localField", "statusId")
-                .append("foreignField", "_id")
-                .append("as", "status")));
-
-    pipeline.add(
-        new Document("$unwind", "$status"));
-
-    // =========================
-    // JOIN LOCATION
-    // =========================
-    pipeline.add(
-        new Document("$lookup",
-            new Document("from", "locations")
-                .append("localField", "locationId")
-                .append("foreignField", "_id")
-                .append("as", "location")));
-
-    pipeline.add(
-        new Document("$unwind", "$location"));
-
-    // =========================
-    // JOIN ISSUE TO
-    // =========================
-    pipeline.add(
-        new Document("$lookup",
-            new Document("from", "issueto")
-                .append("let", new Document("asset_id", "$_id"))
-                .append("pipeline", List.of(
-                    new Document("$match", new Document("$expr",
-                        new Document("$and", List.of(
-                            new Document("$eq", List.of("$assetId", "$$asset_id")),
-                            new Document("$ne", List.of("$returnStatus", true))))))))
-                .append("as", "issueInfo")));
-
-    pipeline.add(
-        new Document("$unwind",
-            new Document("path", "$issueInfo")
-                .append("preserveNullAndEmptyArrays", true)));
-
-    // =========================
-    // JOIN ISSUED LOCATION
-    // =========================
-    pipeline.add(
-        new Document("$lookup",
-            new Document("from", "locations")
-                .append("localField", "issueInfo.locationId")
-                .append("foreignField", "_id")
-                .append("as", "issuedLocation")));
-
-    pipeline.add(
-        new Document("$unwind",
-            new Document("path", "$issuedLocation")
-                .append("preserveNullAndEmptyArrays", true)));
-
-    // =========================
-    // JOIN ISSUED ASSET
-    // =========================
-    pipeline.add(
-        new Document("$lookup",
-            new Document("from", "assets")
-                .append("localField",
-                    "issueInfo.issuedToAssetId")
-                .append("foreignField", "_id")
-                .append("as", "issuedAsset"))
-
-    );
-
-    pipeline.add(
-        new Document("$unwind",
-            new Document("path", "$issuedAsset")
-                .append("preserveNullAndEmptyArrays", true))
-
-    );
-
     List<Document> matchConditions = new ArrayList<>();
+
+    // Pre-filter asset tag IDs based on categoryId and assetTagName
+    boolean hasCategoryFilter = categoryId != null && !categoryId.isBlank() && ObjectId.isValid(categoryId.trim());
+    boolean hasTagNameFilter = assetTagName != null && !assetTagName.isBlank();
+
+    if (hasCategoryFilter || hasTagNameFilter) {
+      Document tagQuery = new Document();
+      if (hasCategoryFilter) {
+        tagQuery.append("categoryId", new ObjectId(categoryId.trim()));
+      }
+      if (hasTagNameFilter) {
+        Pattern pattern = Pattern.compile(Pattern.quote(assetTagName.trim()), Pattern.CASE_INSENSITIVE);
+        tagQuery.append("assetTagName", new Document("$regex", pattern));
+      }
+      List<ObjectId> matchingTagIds = new ArrayList<>();
+      MongoCollection<Document> assetTagsColl = mongoDatabase.getCollection("assettags");
+      for (Document doc : assetTagsColl.find(tagQuery)) {
+        matchingTagIds.add(doc.getObjectId("_id"));
+      }
+      matchConditions.add(new Document("assetTagId", new Document("$in", matchingTagIds)));
+    }
 
     if (assetName != null && !assetName.isBlank()) {
       matchConditions.add(new Document("assetName",
@@ -360,22 +266,12 @@ public class AssetsService {
               .append("$options", "i")));
     }
 
-    if (assetTagName != null && !assetTagName.isBlank()) {
-      matchConditions.add(new Document("assetTag.assetTagName",
-          new Document("$regex", Pattern.quote(assetTagName.trim()))
-              .append("$options", "i")));
+    if (locationId != null && !locationId.isBlank() && ObjectId.isValid(locationId.trim())) {
+      matchConditions.add(new Document("locationId", new ObjectId(locationId.trim())));
     }
 
-    if (categoryId != null && !categoryId.isBlank()) {
-      matchConditions.add(new Document("category._id", new ObjectId(categoryId)));
-    }
-
-    if (locationId != null && !locationId.isBlank()) {
-      matchConditions.add(new Document("location._id", new ObjectId(locationId)));
-    }
-
-    if (statusId != null && !statusId.isBlank()) {
-      matchConditions.add(new Document("status._id", new ObjectId(statusId)));
+    if (statusId != null && !statusId.isBlank() && ObjectId.isValid(statusId.trim())) {
+      matchConditions.add(new Document("statusId", new ObjectId(statusId.trim())));
     }
 
     if ((purchaseDateFrom != null && !purchaseDateFrom.isBlank())
@@ -400,6 +296,7 @@ public class AssetsService {
       matchConditions.add(new Document("purchaseDate", purchaseDateMatch));
     }
 
+    List<Document> pipeline = new ArrayList<>();
     if (!matchConditions.isEmpty()) {
       pipeline.add(new Document("$match",
           matchConditions.size() == 1
@@ -450,7 +347,64 @@ public class AssetsService {
           "data",
           Document.class);
 
-      if (data != null) {
+      if (data != null && !data.isEmpty()) {
+
+        // Load reference collections into memory maps to optimize mapping
+        java.util.Map<ObjectId, Document> categoriesMap = new java.util.HashMap<>();
+        for (Document d : mongoDatabase.getCollection("categories").find()) {
+          categoriesMap.put(d.getObjectId("_id"), d);
+        }
+
+        java.util.Map<ObjectId, Document> statusMap = new java.util.HashMap<>();
+        for (Document d : mongoDatabase.getCollection("status").find()) {
+          statusMap.put(d.getObjectId("_id"), d);
+        }
+
+        java.util.Map<ObjectId, Document> locationsMap = new java.util.HashMap<>();
+        for (Document d : mongoDatabase.getCollection("locations").find()) {
+          locationsMap.put(d.getObjectId("_id"), d);
+        }
+
+        java.util.Map<ObjectId, Document> campusesMap = new java.util.HashMap<>();
+        for (Document d : mongoDatabase.getCollection("campuses").find()) {
+          campusesMap.put(d.getObjectId("_id"), d);
+        }
+
+        java.util.Map<ObjectId, Document> assetTagsMap = new java.util.HashMap<>();
+        for (Document d : mongoDatabase.getCollection("assettags").find()) {
+          assetTagsMap.put(d.getObjectId("_id"), d);
+        }
+
+        // Collect asset IDs to fetch their active issues
+        List<ObjectId> assetIds = new java.util.ArrayList<>();
+        for (Document doc : data) {
+          assetIds.add(doc.getObjectId("_id"));
+        }
+
+        // Query active issues (issueto collection where returnStatus != true) for these assets
+        java.util.Map<ObjectId, Document> activeIssuesMap = new java.util.HashMap<>();
+        MongoCollection<Document> issuetoColl = mongoDatabase.getCollection("issueto");
+        Document activeIssuesQuery = new Document("assetId", new Document("$in", assetIds))
+            .append("returnStatus", new Document("$ne", true));
+        for (Document issue : issuetoColl.find(activeIssuesQuery)) {
+          activeIssuesMap.put(issue.getObjectId("assetId"), issue);
+        }
+
+        // Collect parent asset IDs (issuedToAssetId) from active issues to query parent asset names
+        List<ObjectId> parentAssetIds = new java.util.ArrayList<>();
+        for (Document issue : activeIssuesMap.values()) {
+          ObjectId parentId = issue.getObjectId("issuedToAssetId");
+          if (parentId != null) {
+            parentAssetIds.add(parentId);
+          }
+        }
+
+        java.util.Map<ObjectId, String> parentAssetNamesMap = new java.util.HashMap<>();
+        if (!parentAssetIds.isEmpty()) {
+          for (Document parentAsset : collection.find(new Document("_id", new Document("$in", parentAssetIds)))) {
+            parentAssetNamesMap.put(parentAsset.getObjectId("_id"), parentAsset.getString("assetName"));
+          }
+        }
 
         for (Document doc : data) {
 
@@ -467,117 +421,93 @@ public class AssetsService {
           json.put("purchaseCost", doc.getInteger("purchaseCost"));
           json.put("purchaseDate", dateToString(doc.getDate("purchaseDate")));
           json.put("isIssuable", doc.getBoolean("isIssuable"));
-           json.put("quantity", getQuantityNumber(doc));
+          json.put("quantity", getQuantityNumber(doc));
 
+          // Resolve asset tag and category
           String tagLabel = "N/A";
-          Document tagDoc = (Document) doc.get("assetTag");
-          if (tagDoc != null) {
-            tagLabel = tagDoc.getString("assetTagName");
-          }
-          json.put("assetTagName", tagLabel);
-
-          json.put("model", tagLabel);
-
-          json.put("category",
-              ((Document) doc.get("category"))
-                  .getString("categoryName"));
-
-          json.put("status",
-              ((Document) doc.get("status"))
-                  .getString("statusName"));
-
-          json.put("issuable",
-              doc.getBoolean("isIssuable"));
-
-          // =========================
-          // LOCATION
-          // =========================
-          Document locationDoc = (Document) doc.get("location");
-
-          if (locationDoc != null) {
-
-            json.put("location",
-                locationDoc.getString(
-                    "locationName"));
-
-          } else {
-
-            json.put("location",
-                "N/A");
-          }
-
-          // =========================
-          // BLOCK NAME
-          // =========================
-          String blockId = doc.getString("blockId");
-
-          Document campusDoc = (Document) doc.get("campus");
-
-          String blockName = "N/A";
-
-          if (campusDoc != null) {
-
-            List<Document> blocks = (List<Document>) campusDoc.get(
-                "blocks");
-
-            if (blocks != null) {
-
-              for (Document block : blocks) {
-
-                if (blockId != null &&
-                    blockId.equals(
-                        block.getString(
-                            "blockId"))) {
-
-                  blockName = block.getString(
-                      "blockName");
-
-                  break;
+          String categoryName = "N/A";
+          ObjectId tagId = doc.getObjectId("assetTagId");
+          if (tagId != null) {
+            Document tagDoc = assetTagsMap.get(tagId);
+            if (tagDoc != null) {
+              tagLabel = tagDoc.getString("assetTagName");
+              ObjectId catId = tagDoc.getObjectId("categoryId");
+              if (catId != null) {
+                Document catDoc = categoriesMap.get(catId);
+                if (catDoc != null) {
+                  categoryName = catDoc.getString("categoryName");
                 }
               }
             }
           }
+          json.put("assetTagName", tagLabel);
+          json.put("model", tagLabel);
+          json.put("category", categoryName);
 
-          json.put("block",
-              blockName);
+          // Resolve status
+          String statusName = "N/A";
+          ObjectId statusIdVal = doc.getObjectId("statusId");
+          if (statusIdVal != null) {
+            Document sDoc = statusMap.get(statusIdVal);
+            if (sDoc != null) {
+              statusName = sDoc.getString("statusName");
+            }
+          }
+          json.put("status", statusName);
+          json.put("issuable", doc.getBoolean("isIssuable"));
 
-          // =========================
-          // ISSUED TO
-          // =========================
+          // Resolve location
+          String locationName = "N/A";
+          ObjectId locId = doc.getObjectId("locationId");
+          if (locId != null) {
+            Document lDoc = locationsMap.get(locId);
+            if (lDoc != null) {
+              locationName = lDoc.getString("locationName");
+            }
+          }
+          json.put("location", locationName);
+
+          // Resolve block name
+          String blockId = doc.getString("blockId");
+          String blockName = "N/A";
+          ObjectId campusId = doc.getObjectId("campusId");
+          if (campusId != null) {
+            Document campusDoc = campusesMap.get(campusId);
+            if (campusDoc != null) {
+              List<Document> blocks = (List<Document>) campusDoc.get("blocks");
+              if (blocks != null) {
+                for (Document block : blocks) {
+                  if (blockId != null && blockId.equals(block.getString("blockId"))) {
+                    blockName = block.getString("blockName");
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          json.put("block", blockName);
+
+          // Resolve active assignee (issuedTo)
           String issuedTo = "Not Issued";
-
-          Document issueInfo = (Document) doc.get(
-              "issueInfo");
-
+          Document issueInfo = activeIssuesMap.get(doc.getObjectId("_id"));
           if (issueInfo != null) {
+            ObjectId issueLocId = issueInfo.getObjectId("locationId");
+            ObjectId issueAssetId = issueInfo.getObjectId("issuedToAssetId");
+            ObjectId personId = issueInfo.getObjectId("personId");
 
-            ObjectId personId = issueInfo.getObjectId(
-                "personId");
-
-            Document issuedLocation = (Document) doc.get(
-                "issuedLocation");
-
-            Document issuedAsset = (Document) doc.get(
-                "issuedAsset");
-
-            if (issuedLocation != null) {
-
-              issuedTo = issuedLocation.getString(
-                  "locationName");
-
-            } else if (issuedAsset != null) {
-
-              issuedTo = issuedAsset.getString(
-                  "assetName");
-
+            if (issueLocId != null) {
+              Document lDoc = locationsMap.get(issueLocId);
+              if (lDoc != null) {
+                issuedTo = lDoc.getString("locationName");
+              }
+            } else if (issueAssetId != null) {
+              String parentName = parentAssetNamesMap.get(issueAssetId);
+              issuedTo = parentName != null ? parentName : "Asset (" + issueAssetId.toHexString() + ")";
             } else if (personId != null) {
-
               issuedTo = personId.toHexString();
             }
           }
-
-          json.put("issuedTo",
-              issuedTo);
+          json.put("issuedTo", issuedTo);
 
           result.add(json);
         }
@@ -901,6 +831,7 @@ public class AssetsService {
       if (assetDoc != null) {
         json.put("assetName", assetDoc.getString("assetName"));
         json.put("assetSerialNumber", assetDoc.getString("assetSerialNumber"));
+        json.put("displayId", assetDoc.getString("displayId") != null ? assetDoc.getString("displayId") : "");
       }
 
       if (categoryDoc != null) {
@@ -931,6 +862,7 @@ public class AssetsService {
       json.put("issueQuantity", issueQtyVal);
       json.put("unit", unitVal);
       json.put("returnedQuantity", getNumberField(issueDoc, "returnedQuantity", 0));
+      json.put("unitOfMeasureId", assetDoc != null ? objectIdToString(assetDoc.getObjectId("unitOfMeasureId")) : null);
 
       result.add(json);
     }
@@ -2014,9 +1946,23 @@ public class AssetsService {
       double conversionFactor = originalIssue.containsKey("conversionFactor") ? ((Number) originalIssue.get("conversionFactor")).doubleValue() : 1.0;
       double baseReturnQuantity = returnQuantityVal / conversionFactor;
       double currentQty = getQuantityDouble(assetDoc);
+      // Check if any active issues remain for this asset
+      Document activeQuery = new Document("assetId", new ObjectId(assetId.trim()))
+          .append("returnStatus", false);
+      long activeCount = collection.countDocuments(activeQuery);
+
+      Document updateAssetDoc = new Document("quantity", toQuantityNumber(currentQty + baseReturnQuantity));
+      if (activeCount == 0) {
+        Document readyStatusDoc = mongoDatabase.getCollection("status")
+            .find(new Document("statusName", "Ready to Deploy")).first();
+        if (readyStatusDoc != null) {
+          updateAssetDoc.append("statusId", readyStatusDoc.getObjectId("_id"));
+        }
+      }
+
       assetsColl.updateOne(
           new Document("_id", new ObjectId(assetId.trim())),
-          new Document("$set", new Document("quantity", toQuantityNumber(currentQty + baseReturnQuantity)))
+          new Document("$set", updateAssetDoc)
       );
     }
 
@@ -2409,11 +2355,13 @@ public class AssetsService {
     for (Document doc : collection.aggregate(pipeline)) {
       String name = doc.getString("assetName");
       String serial = doc.getString("assetSerialNumber");
+      String displayId = doc.getString("displayId");
       if (name != null) {
         JsonObject obj = new JsonObject()
             .put("_id", objectIdToString(doc.getObjectId("_id")))
             .put("assetName", name)
-            .put("assetSerialNumber", serial != null ? serial : "");
+            .put("assetSerialNumber", serial != null ? serial : "")
+            .put("displayId", displayId != null ? displayId : "");
         result.add(obj);
       }
     }
