@@ -270,13 +270,27 @@ public class MicroserviceStarter {
     }
 
     // Method to get MongoDB client from the configuration
+    // Method to get MongoDB client from the configuration
     private MongoClient getMongoClient(JsonObject mongoConfig) {
         if (!mongoConfig.containsKey("connection_string") || !mongoConfig.containsKey(DB_NAME)) {
             LOGGER.error("MongoDB connection string or DB name missing from configuration server.");
             throw new BootstrapException("MongoDB connection string or DB name missing from configuration server.");
         }
 
-        String connectionString = mongoConfig.getString("connection_string") + "/" + mongoConfig.getString(DB_NAME);
+        String baseUri = mongoConfig.getString("connection_string").trim();
+        String dbName = mongoConfig.getString(DB_NAME).trim();
+
+        // Strip trailing slashes or query string if present on baseUri
+        if (baseUri.contains("?")) {
+            baseUri = baseUri.substring(0, baseUri.indexOf("?"));
+        }
+        if (baseUri.endsWith("/")) {
+            baseUri = baseUri.substring(0, baseUri.length() - 1);
+        }
+
+        // Construct valid URI: mongodb+srv://.../Db1?authSource=admin
+        String connectionString = baseUri + "/" + dbName + "?authSource=admin";
+
         return MongoClients.create(connectionString);
     }
 
